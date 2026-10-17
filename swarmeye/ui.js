@@ -1,6 +1,6 @@
 // Presentation and input transport only. All simulation/rules run in Python.
 const instances = new WeakMap();
-export default function(component) {
+export default function paint(component) {
   const {data, parentElement, setTriggerValue} = component;
   const root = parentElement.querySelector('#swarmeye-root');
   if (!root || !data) return;
@@ -18,11 +18,26 @@ export default function(component) {
       drafts[form.id] = Object.fromEntries(new FormData(form));
     });
   }
-  root.innerHTML = data.html;
+  // Retain DOM nodes, focus and the expensive textured shell during playback.
+  const patch = (old, next) => {
+    if (old.nodeType !== next.nodeType || old.nodeName !== next.nodeName) {old.replaceWith(next.cloneNode(true));return;}
+    if (old.nodeType !== 1) {if(old.nodeValue!==next.nodeValue) old.nodeValue=next.nodeValue;return;}
+    for(const a of [...old.attributes]) if(!next.hasAttribute(a.name) && !(old.tagName==='DETAILS' && a.name==='open')) old.removeAttribute(a.name);
+    for(const a of next.attributes) if(old.getAttribute(a.name)!==a.value) old.setAttribute(a.name,a.value);
+    const children=[...old.childNodes], incoming=[...next.childNodes];
+    incoming.forEach((child,i)=>children[i]?patch(children[i],child):old.appendChild(child.cloneNode(true)));
+    children.slice(incoming.length).forEach(child=>child.remove());
+    if(old.tagName==='INPUT' && old.type!=='file') {old.value=next.value;old.checked=next.checked;}
+    if(old.tagName==='SELECT' || old.tagName==='TEXTAREA') old.value=next.value;
+  };
+  if (!pageChanged && prior.run===data.run && root.firstElementChild) {
+    const template=document.createElement('template');template.innerHTML=data.html;
+    patch(root.firstElementChild,template.content.firstElementChild);
+  } else root.innerHTML=data.html;
   if (!pageChanged && data.page==='workspace' && prior.run===data.run && data.time>prior.time && data.time-prior.time<=8 && prior.focus===data.focus && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     root.querySelectorAll('.ship-marker').forEach(el => {
       const old=ships.get(el.dataset.ship);
-      if (old) el.animate([{transform:`translate(${old.x}px,${old.y}px)`},{transform:`translate(${el.dataset.x}px,${el.dataset.y}px)`}],{duration:350,easing:'linear'});
+      if (old) el.animate([{transform:`translate(${old.x}px,${old.y}px)`},{transform:`translate(${el.dataset.x}px,${el.dataset.y}px)`}],{duration:data.localFrame ? 1000/data.speed : 200,easing:'linear'});
     });
   }
   Object.entries(drafts).forEach(([id, values]) => {
@@ -37,7 +52,7 @@ export default function(component) {
     root.setAttribute('aria-busy','true');
     root.querySelectorAll('button').forEach(button => {button.disabled=true;});
     clearTimeout(current.timer);
-    setTriggerValue('action', {type, value});
+    setTriggerValue('action', {type, value, at:data.time, run:data.run});
   };
   const download = (content, suffix, type) => {
     const url = URL.createObjectURL(new Blob([content], {type}));
@@ -92,7 +107,18 @@ export default function(component) {
       if (selection && typeof nextFocus.setSelectionRange === 'function') nextFocus.setSelectionRange(...selection);
     }
   }
-  if (data.playing) current.timer = setTimeout(() => send('tick'), 1000);
+  if (data.playing && data.frames?.length) {
+    current.timer=setTimeout(()=>{
+      const [frame,...rest]=data.frames;
+      paint({...component,data:{...data,html:frame.html,time:frame.time,frames:rest,localFrame:true,playing:!frame.stop}});
+      if(frame.stop || !rest.length) {
+        clearTimeout(instances.get(parentElement)?.timer);
+        root.setAttribute('aria-busy','true');
+        root.querySelectorAll('button').forEach(button=>{button.disabled=true;});
+        setTriggerValue('action',{type:'buffer_end',at:frame.time,run:data.run});
+      }
+    },1000/data.speed);
+  }
   instances.set(parentElement,current);
   if (pageChanged) root.scrollIntoView({block:'start',behavior:'instant'});
   return () => {clearTimeout(instances.get(parentElement)?.timer);instances.delete(parentElement);};

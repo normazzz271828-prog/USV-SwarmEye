@@ -1,5 +1,6 @@
 """Streamlit Community Cloud entry point. Python owns all business state."""
 import streamlit as st
+from swarmeye.playback import playback_frames, advance_to_boundary, BUFFER_SECONDS
 from swarmeye.component import atlas
 from swarmeye.engine import new_run, advance, decide, review, export_run, restore_run, DURATION
 from swarmeye.views import render, report
@@ -48,7 +49,16 @@ def handle_action():
     state['download'] = None
     run = next((r for r in state['runs'] if r['id'] == state['active']), None)
     try:
-        if action == 'nav':
+        if run and state['playing'] and event.get('run') == run['id']:
+            at = max(run['time'], min(run['time'] + BUFFER_SECONDS, int(event.get('at', run['time']))))
+            stopped = advance_to_boundary(run, at)
+            if stopped or run['time'] == DURATION:
+                state['playing'] = False
+                if stopped:
+                    state['notice'] = '已停在新的告警或升级时刻，请查看当前证据。'
+        if action == 'buffer_end':
+            pass
+        elif action == 'nav':
             if value not in ('home','scenario','archive','about','compare'):
                 raise ValueError('页面不存在')
             state['page'], state['playing'] = value, False
@@ -150,6 +160,7 @@ def handle_action():
 state = st.session_state.site
 current = next((r for r in state['runs'] if r['id'] == state['active']),None)
 atlas({
+    'frames':playback_frames(state),
     'html':render(state), 'page':state['page'], 'playing':state['playing'],
     'run':current['id'] if current else '', 'form_version':state['form_version'],
     'revision':state.get('revision',0),
