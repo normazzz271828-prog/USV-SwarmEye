@@ -22,6 +22,7 @@ export default function paint(component) {
   }
   // Retain DOM nodes, focus and the expensive textured shell during playback.
   const patch = (old, next) => {
+    if(old.isEqualNode(next))return;
     if (old.nodeType !== next.nodeType || old.nodeName !== next.nodeName) {old.replaceWith(next.cloneNode(true));return;}
     if (old.nodeType !== 1) {if(old.nodeValue!==next.nodeValue) old.nodeValue=next.nodeValue;return;}
     for(const a of [...old.attributes]) if(!next.hasAttribute(a.name) && !(old.tagName==='DETAILS' && a.name==='open')) old.removeAttribute(a.name);
@@ -134,6 +135,16 @@ export default function paint(component) {
     },1000/data.speed);
   }
   instances.set(parentElement,current);
+  if(data.frames_zip && data.playing){
+    (async()=>{
+      try{
+        const bytes=Uint8Array.from(atob(data.frames_zip),c=>c.charCodeAt(0));
+        const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+        const frames=JSON.parse(await new Response(stream).text());
+        if(instances.get(parentElement)===current && !busy) paint({...component,data:{...data,frames_zip:null,frames}});
+      }catch(error){if(instances.get(parentElement)===current && !busy)send('client_error','回放缓冲加载失败，请使用新版浏览器重试。');}
+    })();
+  }
   if(tweens.length){
     const start=performance.now(), duration=1000/data.speed;
     current.animating=true;

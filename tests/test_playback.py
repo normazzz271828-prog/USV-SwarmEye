@@ -24,8 +24,9 @@ def test_buffer_does_not_commit_future_and_stops_at_alert():
 def test_quiet_buffer_is_bounded_and_pause_commits_displayed_time():
     run = new_run(config=preset('head_on', 0))
     frames = playback_frames(state_for(run))
-    assert len(frames) == 30
-    assert not any(f['stop'] for f in frames)
+    assert len(frames) == 180
+    assert not any(f['stop'] for f in frames[:-1])
+    assert frames[-1]['stop']
     assert not advance_to_boundary(run, 17)
     assert run['time'] == 17
     assert len(run['history']) == 18
@@ -36,11 +37,11 @@ def test_key_excerpt_is_contiguous_bounded_and_stops():
     from swarmeye.playback import key_window
     run = new_run(config=preset('head_on',0))
     window = key_window(run)
-    assert window == {'start':38,'end':98}
+    assert window == {'start':42,'end':75}
     assert run['time'] == 0
-    advance(run,90)
+    advance(run,67)
     frames = playback_frames({**state_for(run),'windows':{run['id']:window}})
-    assert [f['time'] for f in frames] == list(range(91,99))
+    assert [f['time'] for f in frames] == list(range(68,76))
     assert frames[-1]['stop']
 
 

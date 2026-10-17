@@ -1,7 +1,7 @@
 """Native vector art and metre-based plots; no screenshot used as the UI."""
 import math
 from .engine import SHIPS, LABELS, DOMAIN_A, truth, convex_hull, domain_points, cluster
-from .scenarios import config_of
+from .scenarios import config_of, OWN_ACTIONS
 
 LOGO = '''<svg viewBox="0 0 64 32" aria-hidden="true"><path d="M2 26C14 23 17 5 30 6s17 23 32 7M14 17c10-11 20 20 38 7" fill="none" stroke="currentColor" stroke-width="2"/></svg>'''
 
@@ -84,6 +84,14 @@ def chart(run, at=None, actual=False, focus=False, domains=True, circles=True, s
         color='#eeeade' if ship=='OS' else '#8bdbd9'
         dash='3 4' if not actual and ship!='OS' and run['delay'] else 'none'
         parts.append(f'<polyline data-motion="trace-{ship}" points="{pts(trace)}" fill="none" stroke="{color}" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="{dash}"/>')
+    if actual and config['scenario'] in OWN_ACTIONS and config['turn_at']<180:
+        turn=config['turn_at']
+        origin=truth(turn,config)['OS']
+        ax,ay=xy(origin['x'],origin['y'])
+        bx,by=xy(origin['x'],origin['y']+4*config['speed_factor']*max(0,min(at-turn,25)))
+        parts.append(f'<circle cx="{ax}" cy="{ay}" r="5" fill="#e5b47e"/><text x="{ax+12}" y="{ay+24}" fill="#e5b47e" font-size="11">预设动作点 · {turn} s</text>')
+        if at>turn:
+            parts.append(f'<path d="M{ax} {ay}L{bx} {by}" stroke="#e5b47e" stroke-width="2" stroke-dasharray="5 5"/><text x="{bx+12}" y="{by-8}" fill="#e5b47e" font-size="10">未采取动作参考</text>')
     if domains:
         for group in cluster(states):
             if len(group)>1:

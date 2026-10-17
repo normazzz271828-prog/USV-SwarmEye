@@ -19,11 +19,12 @@ with sync_playwright() as p:
     app.get_by_role('button', name='开始演练', exact=True).first.click()
     app.locator('[data-action="scenario"][data-value="head_on"]').click()
     app.get_by_role('button',name='开始新演练').click()
-    expect(app.locator('#timeline')).to_have_value('38')
+    expect(app.locator('#timeline')).to_have_value('42')
     expect(app.get_by_text('固定视野',exact=True)).to_be_visible()
     app.locator('#play-speed').select_option('8')
     app.get_by_role('button',name='播放回放',exact=True).click()
     expect(app.get_by_role('button',name='暂停回放',exact=True)).to_be_enabled()
+    before_playback_messages=len(sent)
     samples=app.locator('.plot-panel .plot').evaluate("""async svg=>{
       const samples=[];
       for(let i=0;i<100;i++){
@@ -38,11 +39,12 @@ with sync_playwright() as p:
     assert len({s['axis'] for s in samples})==1
     assert all(abs(s['x']-s['cx'])<.01 and abs(s['y']-s['cy'])<.01 for s in samples)
     assert max(abs(b['y']-a['y']) for a,b in zip(samples,samples[1:]))<4
-    expect(app.locator('#timeline')).to_have_value('98',timeout=30000)
+    expect(app.locator('#timeline')).to_have_value('75',timeout=30000)
     expect(app.get_by_role('button',name='播放回放',exact=True)).to_be_disabled()
     expect(app.locator('.excerpt-note')).to_contain_text('本片段已结束')
+    assert len(sent)-before_playback_messages==1, 'Only the final acknowledgement should be sent'
     app.get_by_role('button',name='继续完整过程',exact=True).click()
     expect(app.get_by_role('button',name='播放回放',exact=True)).to_be_enabled()
     assert not errors, errors
-    print(json.dumps({'url':url,'excerpt':'38-98','fixed_axes':True,'synchronized_motion':True,'no_position_jump':True,'errors':errors}))
+    print(json.dumps({'url':url,'excerpt':'42-75','fixed_axes':True,'synchronized_motion':True,'no_position_jump':True,'errors':errors}))
     browser.close()

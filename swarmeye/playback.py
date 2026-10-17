@@ -1,8 +1,17 @@
 """Bounded presentation buffer. Authoritative records advance only on acknowledgement."""
 from copy import deepcopy
+import base64
+import gzip
+import json
 from .engine import advance, DURATION
 
-BUFFER_SECONDS = 30
+BUFFER_SECONDS = DURATION
+
+
+def encode_frames(frames):
+    if not frames: return None
+    raw=json.dumps(frames,ensure_ascii=False,separators=(',',':')).encode('utf-8')
+    return base64.b64encode(gzip.compress(raw,compresslevel=5)).decode('ascii')
 
 
 def key_window(run):
@@ -13,9 +22,9 @@ def key_window(run):
     nearest = min((h for h in preview['history'] if h['min_distance'] is not None),
                   key=lambda h: h['min_distance'])['time']
     turn = config_of(run)['turn_at']
-    anchor = preview['events'][0]['start'] if preview['events'] else min(turn, nearest)
-    start = max(0, anchor - 12)
-    end = min(DURATION, start + 60)
+    anchor = turn if turn < DURATION else nearest
+    start = max(0, anchor - 8)
+    end = min(DURATION, anchor + 25)
     return {'start': start, 'end': end}
 
 

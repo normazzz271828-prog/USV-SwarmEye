@@ -37,3 +37,6 @@
 @media(max-width:760px){.inspection-content{min-height:0}.excerpt-note{font-size:11px;padding:12px}.legend{line-height:1.8}}
 
 @media(min-width:761px){.workspace .plot-panel .plot{height:570px;width:100%}.workspace .inspection-content{height:650px;min-height:650px;overflow-y:auto}.workspace-grid{align-items:start}}
+
+.rule-explanation,.action-explanation{margin:20px 0;padding-top:18px;border-top:1px solid var(--line)}.rule-explanation h3,.action-explanation h3{font-size:19px;margin-bottom:12px}.rule-explanation p,.action-explanation p{font-size:12px;color:#b9ced2;margin:10px 0}.rule-values{font-size:11px;line-height:1.8}.rule-values dt{color:#92abb4}.rule-values dd{margin:0 0 10px;color:#e4e9de}.rule-verdict{border-left:2px solid #e5b47e;padding-left:12px}.rule-explanation pre{font:11px/1.9 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#061b25;border-radius:5px}.scenario-index{max-height:1000px;overflow-y:auto}
+@media(max-width:760px){.scenario-index{grid-template-columns:repeat(2,1fr);max-height:none}.scenario-choice strong{font-size:17px}}

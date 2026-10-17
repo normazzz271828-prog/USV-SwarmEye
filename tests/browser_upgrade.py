@@ -35,7 +35,7 @@ with sync_playwright() as p:
     expect(page.locator('#hero-title').or_(page.locator('iframe[src*="/~/+/"]'))).to_be_visible(timeout=60000)
     expect(app_scope(page).locator('#hero-title')).to_be_visible(timeout=60000)
     app_scope(page).get_by_role('button',name='开始演练',exact=True).first.click()
-    expect(app_scope(page).locator('.scenario-choice')).to_have_count(3)
+    expect(app_scope(page).locator('.scenario-choice')).to_have_count(6)
     capture(page,'scenarios.png')
     app_scope(page).get_by_role('button',name='完整过程 · 180 秒',exact=True).click()
     # Real config submission, including server-side initial-state preview.

@@ -14,7 +14,7 @@ def scenario(state):
     presets=''.join(button(p[0],'preset',i,'secondary') for i,p in enumerate(PRESETS[selected]))
     def control(key,label,low,high,step,unit):
         return f'<label class="parameter" for="cfg-{key}"><span>{label}<output>{draft[key]} {unit}</output></span><input id="cfg-{key}" name="{key}" type="range" min="{low}" max="{high}" step="{step}" value="{draft[key]}" data-unit="{unit}"></label>'
-    controls=control('delay','观测延迟',0,30,10,'s')+control('speed_factor','双方航速倍率',.5,1.5,.25,'倍')+control('turn_at','离队时刻' if selected=='overtaking' else '转向时刻',30,180,5,'s')+control('spacing','队内间距',30,180,10,'m')
+    controls=control('delay','观测延迟',0,30,10,'s')+control('speed_factor','双方航速倍率',.5,1.5,.25,'倍')+control('turn_at','离队时刻' if selected=='overtaking' else ('减速时刻' if selected=='slow_yield' else '转向时刻'),30,180,5,'s')+control('spacing','队内间距',30,180,10,'m')
     mode_controls=button('关键片段 · 推荐','playback_mode','key','primary' if state.get('excerpt',True) else 'secondary')+button('完整过程 · 180 秒','playback_mode','full','secondary' if state.get('excerpt',True) else 'primary')
     current=state['runs'][-1] if state['runs'] else None
     resume=button('继续上次演练 →','open_run',current['id'],'secondary') if current else ''
@@ -22,11 +22,11 @@ def scenario(state):
     # Preview the configured initial geometry, never a future outcome.
     initial['history'][0]['states']=truth(0,draft)
     preview=chart(initial)
-    return f'''<main class="inner-page">{page_title('SCENARIO LAB / 03','从一次会遇开始。','三种情境，六组推荐体验。直接在网页调整条件，开始自己的演练。')}
+    return f'''<main class="inner-page">{page_title('SCENARIO LAB / 06','从一次会遇开始。','六种情境，十二组推荐体验。直接在网页调整条件，开始自己的演练。')}
     <div class="scenario-layout"><aside class="scenario-index"><p class="eyebrow">选择会遇情境</p>{options}<div class="small muted">所有场景均为自建仿真。每次修改都会创建独立记录。</div></aside>
     <section class="scenario-detail"><div class="scenario-preview">{preview}<div class="preview-caption"><span class="eyebrow">INITIAL CONDITIONS</span><h2>{name}</h2><p>{description}</p><small>完整初态预览 · 不是演练已收到的观测</small></div></div>
     <div class="detail-content"><div class="actions"><span class="small muted">推荐设置</span>{presets}</div>
-    <div class="actions excerpt-options">{mode_controls}</div><p class="small muted">关键片段从会遇前开始，连续展示最多 60 秒仿真；默认 2×，约 30 秒观看。告警仍自动暂停，完整计算记录保留。</p><form id="scenario-form"><input type="hidden" name="scenario" value="{selected}"><div class="parameter-grid">{controls}</div><p class="small muted">时长 180 s · 1 本船 + 3 外部船 · 1 s 计算步长。航速倍率改变双方真实运动；回放倍率只改变观看速度。时刻 180 s 表示演练内保持原航向。转向为理想化速度切换。</p><div class="actions"><button type="submit" class="btn primary">开始新演练 ↗</button><button type="button" class="btn secondary" data-action="preview">更新初态预览</button></div></form>
+    <div class="actions excerpt-options">{mode_controls}</div><p class="small muted">关键片段从预设动作前 8 秒开始，看到动作后 25 秒；默认 2×，约 17 秒观看。保持航向场景围绕最近接近时刻展示。告警仍自动暂停，完整计算记录保留。</p><form id="scenario-form"><input type="hidden" name="scenario" value="{selected}"><div class="parameter-grid">{controls}</div><p class="small muted">时长 180 s · 1 本船 + 3 外部船 · 1 s 计算步长。航速倍率改变双方真实运动；回放倍率只改变观看速度。时刻 180 s 表示演练内保持原航向。新增本船动作场景采用 8 秒连续速度过渡；动作均由场景预设，并非算法自主避碰。</p><div class="actions"><button type="submit" class="btn primary">开始新演练 ↗</button><button type="button" class="btn secondary" data-action="preview">更新初态预览</button></div></form>
     <div class="actions">{resume}<label class="file-button">恢复 JSON 记录<input id="import-file" type="file" accept=".json,application/json" aria-label="导入 JSON 演练记录"></label></div><p class="small muted">当前设置不保证触发告警；跨越分群阈值时，外部编队可能分裂。</p></div></section></div></main>'''
 
 

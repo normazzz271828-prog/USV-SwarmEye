@@ -1,6 +1,6 @@
 """Streamlit Community Cloud entry point. Python owns all business state."""
 import streamlit as st
-from swarmeye.playback import playback_frames, advance_to_boundary, BUFFER_SECONDS, key_window, playback_end
+from swarmeye.playback import playback_frames, advance_to_boundary, BUFFER_SECONDS, encode_frames, key_window, playback_end
 from swarmeye.component import atlas
 from swarmeye.engine import new_run, advance, decide, review, export_run, restore_run, DURATION
 from swarmeye.views import render, report
@@ -54,7 +54,7 @@ def handle_action():
     run = next((r for r in state['runs'] if r['id'] == state['active']), None)
     try:
         if run and state['playing'] and event.get('run') == run['id']:
-            at = max(run['time'], min(run['time'] + BUFFER_SECONDS, int(event.get('at', run['time']))))
+            at = max(run['time'], min(run['time'] + BUFFER_SECONDS, playback_end(state,run), int(event.get('at', run['time']))))
             stopped = advance_to_boundary(run, at)
             if stopped or run['time'] >= playback_end(state,run):
                 state['playing'] = False
@@ -177,7 +177,7 @@ def handle_action():
 state = st.session_state.site
 current = next((r for r in state['runs'] if r['id'] == state['active']),None)
 atlas({
-    'frames':playback_frames(state),
+    'frames_zip':encode_frames(playback_frames(state)),
     'html':render(state), 'page':state['page'], 'playing':state['playing'],
     'run':current['id'] if current else '', 'form_version':state['form_version'],
     'revision':state.get('revision',0),
