@@ -15,7 +15,6 @@ def scenario(state):
     def control(key,label,low,high,step,unit):
         return f'<label class="parameter" for="cfg-{key}"><span>{label}<output>{draft[key]} {unit}</output></span><input id="cfg-{key}" name="{key}" type="range" min="{low}" max="{high}" step="{step}" value="{draft[key]}" data-unit="{unit}"></label>'
     controls=control('delay','观测延迟',0,30,10,'s')+control('speed_factor','双方航速倍率',.5,1.5,.25,'倍')+control('turn_at','离队时刻' if selected=='overtaking' else ('减速时刻' if selected=='slow_yield' else '转向时刻'),30,180,5,'s')+control('spacing','队内间距',30,180,10,'m')
-    mode_controls=button('关键片段 · 推荐','playback_mode','key','primary' if state.get('excerpt',True) else 'secondary')+button('完整过程 · 180 秒','playback_mode','full','secondary' if state.get('excerpt',True) else 'primary')
     current=state['runs'][-1] if state['runs'] else None
     resume=button('继续上次演练 →','open_run',current['id'],'secondary') if current else ''
     initial=new_run(config=draft)
@@ -26,7 +25,7 @@ def scenario(state):
     <div class="scenario-layout"><aside class="scenario-index"><p class="eyebrow">选择会遇情境</p>{options}<div class="small muted">所有场景均为自建仿真。每次修改都会创建独立记录。</div></aside>
     <section class="scenario-detail"><div class="scenario-preview">{preview}<div class="preview-caption"><span class="eyebrow">INITIAL CONDITIONS</span><h2>{name}</h2><p>{description}</p><small>完整初态预览 · 不是演练已收到的观测</small></div></div>
     <div class="detail-content"><div class="actions"><span class="small muted">推荐设置</span>{presets}</div>
-    <div class="actions excerpt-options">{mode_controls}</div><p class="small muted">关键片段从预设动作前 8 秒开始，看到动作后 25 秒；默认 2×，约 17 秒观看。保持航向场景围绕最近接近时刻展示。告警仍自动暂停，完整计算记录保留。</p><form id="scenario-form"><input type="hidden" name="scenario" value="{selected}"><div class="parameter-grid">{controls}</div><p class="small muted">时长 180 s · 1 本船 + 3 外部船 · 1 s 计算步长。航速倍率改变双方真实运动；回放倍率只改变观看速度。时刻 180 s 表示演练内保持原航向。新增本船动作场景采用 8 秒连续速度过渡；动作均由场景预设，并非算法自主避碰。</p><div class="actions"><button type="submit" class="btn primary">开始新演练 ↗</button><button type="button" class="btn secondary" data-action="preview">更新初态预览</button></div></form>
+    <p class="small muted">关键片段从预设动作前 8 秒开始，看到动作后 25 秒；默认 2×，约 17 秒观看。保持航向场景围绕最近接近时刻展示。告警只更新提示，播放不中断。</p><form id="scenario-form"><input type="hidden" name="scenario" value="{selected}"><div class="parameter-grid">{controls}</div><p class="small muted">动作片段回放 · 1 本船 + 3 外部船 · 1 s 计算步长。航速倍率改变双方真实运动；回放倍率只改变观看速度。时刻 180 s 表示演练内保持原航向。新增本船动作场景采用 8 秒连续速度过渡；动作均由场景预设，并非算法自主避碰。</p><div class="actions"><button type="submit" class="btn primary">开始新演练 ↗</button><button type="button" class="btn secondary" data-action="preview">更新初态预览</button></div></form>
     <div class="actions">{resume}<label class="file-button">恢复 JSON 记录<input id="import-file" type="file" accept=".json,application/json" aria-label="导入 JSON 演练记录"></label></div><p class="small muted">当前设置不保证触发告警；跨越分群阈值时，外部编队可能分裂。</p></div></section></div></main>'''
 
 
@@ -34,11 +33,12 @@ def playback_controls(state,complete):
     from .views import button
     from .playback import playback_end
     run=next(r for r in state['runs'] if r['id']==state['active'])
+    complete=run['time']>=playback_end(state,run)
     disabled='disabled' if complete else ''
     play_disabled='disabled' if run['time']>=playback_end(state,run) else ''
     controls=button('暂停回放' if state['playing'] else '播放回放','play',kind='primary',extra=play_disabled)
     controls+=button('+ 1 秒','advance',1,'secondary',disabled)+button('+ 10 秒','advance',10,'secondary',disabled)
-    controls+=button('下一事件','next_event',kind='secondary',extra=disabled)+button('推演至结束','advance',180,'text-button',disabled)
+    controls+=button('跳到片段末尾','advance',180,'text-button',disabled)
     opts=''.join(f'<option value="{v}" {"selected" if state.get("speed",1)==v else ""}>{v}×</option>' for v in (1,2,4,8))
     return controls+f'<label class="speed-label" for="play-speed">回放速度<select id="play-speed">{opts}</select></label>'
 

@@ -14,8 +14,9 @@ def test_buffer_does_not_commit_future_and_stops_at_alert():
     advance(run, 48)
     original = deepcopy(run)
     frames = playback_frames(state_for(run))
-    assert [f['time'] for f in frames] == list(range(49, 56))
+    assert [f['time'] for f in frames] == list(range(49, 181))
     assert frames[-1]['stop']
+    assert not any(f['stop'] for f in frames[:-1])
     assert run == original
     assert advance_to_boundary(run, 78)
     assert run['time'] == 55

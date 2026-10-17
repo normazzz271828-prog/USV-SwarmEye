@@ -51,7 +51,8 @@ def playback_frames(state):
     frames = []
     end = playback_end(state, run)
     for t in range(run['time'] + 1, min(end, run['time'] + BUFFER_SECONDS) + 1):
-        stop = advance_to_boundary(run, t) or t == end
+        advance(run,t)
+        stop = t == end
         if stop:
             preview['playing'] = False
         frames.append({'time': t, 'html': render(preview), 'stop': stop})

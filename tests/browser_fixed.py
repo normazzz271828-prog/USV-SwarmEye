@@ -43,8 +43,7 @@ with sync_playwright() as p:
     expect(app.get_by_role('button',name='播放回放',exact=True)).to_be_disabled()
     expect(app.locator('.excerpt-note')).to_contain_text('本片段已结束')
     assert len(sent)-before_playback_messages==1, 'Only the final acknowledgement should be sent'
-    app.get_by_role('button',name='继续完整过程',exact=True).click()
-    expect(app.get_by_role('button',name='播放回放',exact=True)).to_be_enabled()
+    assert app.get_by_role('button',name='继续完整过程',exact=True).count()==0
     assert not errors, errors
     print(json.dumps({'url':url,'excerpt':'42-75','fixed_axes':True,'synchronized_motion':True,'no_position_jump':True,'errors':errors}))
     browser.close()

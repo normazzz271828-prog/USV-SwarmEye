@@ -24,7 +24,7 @@ def home(state):
     runs = state['runs']
     if runs:
         recent = runs[-1]
-        row = f'<span class="archive-title">最近的演练</span><span class="eyebrow">RUN {recent["id"][:6].upper()}</span><span>{title(recent)}</span><span class="muted">{recent["time"]} / 180 s</span>{button("查看演练记录 ↗", "open_run", recent["id"], "text-button")}'
+        row = f'<span class="archive-title">最近的演练</span><span class="eyebrow">RUN {recent["id"][:6].upper()}</span><span>{title(recent)}</span><span class="muted">{recent["time"]} / {window["end"]} s</span>{button("查看演练记录 ↗", "open_run", recent["id"], "text-button")}'
     else:
         row = f'<span class="archive-title">场景档案</span><span class="eyebrow">06 SCENARIOS</span><span>会遇 · 转向 · 减速</span><span class="muted">十二组推荐体验 · 网页调参</span>{button("查看场景说明 ↗", "nav", "scenario", "text-button")}'
     return f'''<main class="home">
@@ -58,7 +58,8 @@ def workspace(state):
     run = next(r for r in state['runs'] if r['id'] == state['active'])
     snap = run['history'][-1]
     level = snap['level']
-    complete = run['time'] == DURATION
+    window = state.get('windows',{}).get(run['id'],{'start':0,'end':DURATION})
+    complete = run['time'] >= window['end']
     active = next((e for e in reversed(run['events']) if e['end'] is None), None)
     event = active or (run['events'][-1] if run['events'] else None)
     reason = ('外部船观测尚未到达，暂不能形成完整判断。' if not snap['valid'] else
@@ -71,7 +72,7 @@ def workspace(state):
     age = f'{max(ages)} s' if ages else '等待首批观测'
     form = ''
     if active and not complete:
-        form = f'''<form id="decision-form" class="decision-form"><input type="hidden" name="event_id" value="{active['id']}"><label for="decision-action">记录你的处置</label><select name="action" id="decision-action"><option>采纳建议</option><option>暂缓处理</option><option>驳回建议</option></select><label for="decision-reason">理由与实际行动</label><textarea id="decision-reason" name="reason" minlength="2" maxlength="1000" required placeholder="写下依据，以及实际采取的行动…"></textarea><label for="decision-revisit">复核时点或条件 <span class="muted">（暂缓时必填）</span></label><input id="decision-revisit" name="revisit" maxlength="300" placeholder="例如：10 秒后重新核实目标航向"><button class="btn primary" type="submit">保存处置记录 ↗</button><p class="small muted">记录判断，不改变仿真航迹。填写时演练会自动暂停。</p></form>'''
+        form = f'''<form id="decision-form" class="decision-form"><input type="hidden" name="event_id" value="{active['id']}"><label for="decision-action">记录你的处置</label><select name="action" id="decision-action"><option>采纳建议</option><option>暂缓处理</option><option>驳回建议</option></select><label for="decision-reason">理由与实际行动</label><textarea id="decision-reason" name="reason" minlength="2" maxlength="1000" required placeholder="写下依据，以及实际采取的行动…"></textarea><label for="decision-revisit">复核时点或条件 <span class="muted">（暂缓时必填）</span></label><input id="decision-revisit" name="revisit" maxlength="300" placeholder="例如：10 秒后重新核实目标航向"><button class="btn primary" type="submit">保存处置记录 ↗</button><p class="small muted">记录判断，不改变仿真航迹。可手动暂停后填写。</p></form>'''
     elif complete:
         form = f'<div class="completion-note"><h3>演练已完成</h3><p>现在可以查看完整经过，复核当时的判断。</p>{button("进入事件复盘 ↗", "nav", "archive", "primary")}</div>'
     else:
@@ -86,12 +87,12 @@ def workspace(state):
     controls = playback_controls(state,complete)
     actual = state.get('plot_mode','actual') == 'actual'
     plot_label = '仿真运动真值 · 右侧研判仅使用延迟观测' if actual else '延迟观测与外推位置 · 收到新观测时估计位置可能修正'
-    window = state.get('windows',{}).get(run['id'])
-    excerpt = (f'<div class="excerpt-note">关键片段 {window["start"]}–{window["end"]} s · 连续播放，不跳帧。'+('本片段已结束。' if run['time']>=window['end'] else '')+button('继续完整过程','full_playback',kind='secondary')+'</div>') if window else ''
+    window = state.get('windows',{}).get(run['id'],{'start':0,'end':DURATION})
+    excerpt = (f'<div class="excerpt-note">关键片段 {window["start"]}–{window["end"]} s · 连续播放，不跳帧。'+('本片段已结束。' if run['time']>=window['end'] else '')+'</div>') if window else ''
     return f'''<main class="inner-page workspace">{page_title('DECISION WORKSPACE / '+run['id'][:6].upper(), '此刻，如何判断。', title(run)+' · 自建仿真 · 外部观测延迟 '+str(run['delay'])+' s', '<span class="mode-badge">固定视野 / 仿真与观测分离</span>')}
     {excerpt}<div class="workspace-grid"><section class="plot-panel"><div class="panel-top"><span>{SCENARIOS[config_of(run)["scenario"]][0]} / 东北米制坐标</span><span class="small muted">{len(snap['groups'])} 个外部观测群</span></div>{view_controls(state)}{chart(run,actual=actual,focus=False,domains=state.get("domains",True),circles=state.get("circles",True))}<div class="legend"><span class="legend-own">本船</span><span class="legend-target">外部目标</span><span>{plot_label}</span><span>点线圆：计算保护域</span></div></section>
     <aside class="inspection"><div class="panel-top"><span>延迟观测研判</span><span class="eyebrow">{event['id'] if active else 'OBSERVING'}</span></div><div class="inspection-content"><span class="status level-{level}">{level_text(level)}</span><p class="advice">{reason}</p><div class="quality"><span>数据质量 · {snap['quality']}</span><span>观测年龄 {age}</span></div>{evidence}{explain(run)}<details><summary>查看计算依据</summary><p class="small">演示规则 {esc(snap['rule'])} · {VERSION}。单船椭圆半轴 60 / 35 m；硬约束采用两船半径 60 m 外接圆，中心距离 ≤ 120 m 触发。预警：0 &lt; TCPA ≤ 60 s 且 DCPA &lt; 150 m，连续 3 帧。融合凸包用于群体展示。指标不是碰撞概率。</p></details>{form}</div></aside></div>
-    <section class="timeline-panel"><div class="timeline-top"><div class="actions">{controls}</div><div class="clock">{run['time']:03d}<span> / 180 s</span></div></div><label for="timeline" class="sr-only">向前推进演练时钟</label><input id="timeline" class="timeline" type="range" min="0" max="180" value="{run['time']}" data-min="{run['time']}" {'disabled' if complete else ''}><div class="timeline-labels"><span>000 s · 开始</span><span>逐秒计算 · 关键告警自动暂停 · 倍速为目标播放速度</span><span>180 s · 结束</span></div><div class="spark-label">最近船间距离 / m</div>{sparkline(run)}</section>
+    <section class="timeline-panel"><div class="timeline-top"><div class="actions">{controls}</div><div class="clock">{run['time']:03d}<span> / {window["end"]} s</span></div></div><label for="timeline" class="sr-only">向前推进演练时钟</label><input id="timeline" class="timeline" type="range" min="{window["start"]}" max="{window["end"]}" value="{run['time']}" data-min="{run['time']}" {'disabled' if complete else ''}><div class="timeline-labels"><span>{window["start"]:03d} s · 片段开始</span><span>逐秒计算 · 告警不中断播放</span><span>{window["end"]:03d} s · 片段结束</span></div><div class="spark-label">最近船间距离 / m</div>{sparkline(run)}</section>
     <section class="journal"><div><p class="eyebrow">DECISION JOURNAL</p><h2>判断留下痕迹。</h2></div><div>{'<ul>'+decisions+'</ul>' if decisions else '<p class="muted">尚无人工处置记录。</p>'}</div><div>{button('下载 JSON 记录 ↓','download_json',kind='secondary')}<p class="small muted">保存在本次会话；下载后可恢复。</p></div></section></main>'''
 
 

@@ -88,7 +88,7 @@ export default function paint(component) {
       send(form.id === 'scenario-form' ? 'start' : form.id === 'decision-form' ? 'decide' : 'review', Object.fromEntries(new FormData(form)));
     };
     // Stop playback before editing, without dropping the first character or draft.
-    form.onfocusin = () => { if (data.playing) send('pause'); };
+
   });
   root.querySelectorAll('.parameter input').forEach(input => {
     input.oninput=()=> {input.closest('label').querySelector('output').textContent=input.value+' '+input.dataset.unit;};
