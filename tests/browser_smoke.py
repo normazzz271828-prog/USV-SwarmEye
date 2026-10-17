@@ -32,6 +32,7 @@ with sync_playwright() as p:
     page.locator('.scene-glass button').click()
     expect(page.get_by_role('heading',name='从一次会遇开始。')).to_be_visible()
     screenshot(page,'scenario-desktop.png')
+    page.get_by_role('button',name='完整过程 · 180 秒',exact=True).click()
     page.get_by_role('button',name='开始新演练').click()
     expect(page.locator('.clock')).to_contain_text('000')
     # Seek forward without leaking any unreached future values to the plot.

@@ -1,2 +1,2 @@
-# Refresh the Cloud build for the 2026-10-17 buffered-player asset release.
+# Refresh the Cloud build for the 2026-10-17 fixed-view key-excerpt release.
 streamlit==1.66.0

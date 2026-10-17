@@ -18,6 +18,7 @@ with sync_playwright() as p:
     expect(app.locator('#hero-title')).to_be_visible(timeout=60000)
     app.get_by_role('button', name='开始演练', exact=True).first.click()
     app.locator('[data-action="scenario"][data-value="head_on"]').click()
+    app.get_by_role('button',name='完整过程 · 180 秒',exact=True).click()
     app.get_by_role('button', name='开始新演练').click()
     app.locator('#play-speed').select_option('8')
     app.get_by_role('button', name='播放回放', exact=True).click()

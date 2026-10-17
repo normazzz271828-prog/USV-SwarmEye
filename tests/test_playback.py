@@ -30,3 +30,29 @@ def test_quiet_buffer_is_bounded_and_pause_commits_displayed_time():
     assert run['time'] == 17
     assert len(run['history']) == 18
     assert playback_frames({**state_for(run), 'playing': False}) == []
+
+
+def test_key_excerpt_is_contiguous_bounded_and_stops():
+    from swarmeye.playback import key_window
+    run = new_run(config=preset('head_on',0))
+    window = key_window(run)
+    assert window == {'start':38,'end':98}
+    assert run['time'] == 0
+    advance(run,90)
+    frames = playback_frames({**state_for(run),'windows':{run['id']:window}})
+    assert [f['time'] for f in frames] == list(range(91,99))
+    assert frames[-1]['stop']
+
+
+def test_fixed_camera_contains_every_ship_for_extreme_configurations():
+    from swarmeye.graphics import fixed_view
+    from swarmeye.scenarios import validate_config, motion
+    for scenario in ('crossing','head_on','overtaking'):
+        for speed in (.5,1.5):
+            for turn in (30,180):
+                config=validate_config(dict(scenario=scenario,speed_factor=speed,turn_at=turn,spacing=180))
+                cx,cy,span=fixed_view([config])
+                for t in range(181):
+                    for ship in motion(t,config).values():
+                        assert abs(ship['x']-cx)+60 <= span/2
+                        assert abs(ship['y']-cy)+60 <= span*490/620/2

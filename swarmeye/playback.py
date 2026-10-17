@@ -5,6 +5,24 @@ from .engine import advance, DURATION
 BUFFER_SECONDS = 30
 
 
+def key_window(run):
+    """Editorial excerpt of a deterministic demo, never a risk prediction."""
+    from .scenarios import config_of
+    preview = deepcopy(run)
+    advance(preview, DURATION)
+    nearest = min((h for h in preview['history'] if h['min_distance'] is not None),
+                  key=lambda h: h['min_distance'])['time']
+    turn = config_of(run)['turn_at']
+    anchor = preview['events'][0]['start'] if preview['events'] else min(turn, nearest)
+    start = max(0, anchor - 12)
+    end = min(DURATION, start + 60)
+    return {'start': start, 'end': end}
+
+
+def playback_end(state, run):
+    return state.get('windows', {}).get(run['id'], {}).get('end', DURATION)
+
+
 def advance_to_boundary(run, until):
     """Never cross a new event or escalation, even for a stale client request."""
     for t in range(run['time'] + 1, min(DURATION, until) + 1):
@@ -22,8 +40,9 @@ def playback_frames(state):
     preview = deepcopy(state)
     run = next(r for r in preview['runs'] if r['id'] == preview['active'])
     frames = []
-    for t in range(run['time'] + 1, min(DURATION, run['time'] + BUFFER_SECONDS) + 1):
-        stop = advance_to_boundary(run, t) or t == DURATION
+    end = playback_end(state, run)
+    for t in range(run['time'] + 1, min(end, run['time'] + BUFFER_SECONDS) + 1):
+        stop = advance_to_boundary(run, t) or t == end
         if stop:
             preview['playing'] = False
         frames.append({'time': t, 'html': render(preview), 'stop': stop})

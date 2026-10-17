@@ -6,8 +6,10 @@ export default function paint(component) {
   if (!root || !data) return;
   const prior = instances.get(parentElement) || {};
   clearTimeout(prior.timer);
+  cancelAnimationFrame(prior.animationFrame);
   const pageChanged = prior.page !== data.page;
-  const ships = new Map([...root.querySelectorAll('.ship-marker')].map(el => [el.dataset.ship,{x:Number(el.dataset.x),y:Number(el.dataset.y)}]));
+  const motionAttrs=['transform','points','cx','cy','r'];
+  const motion=new Map([...root.querySelectorAll('[data-motion]')].map(el=>[el.dataset.motion,Object.fromEntries(motionAttrs.filter(a=>el.hasAttribute(a)).map(a=>[a,el.getAttribute(a)]))]));
   const focused = root.getRootNode().activeElement;
   const focusId = !pageChanged && focused?.id;
   const selection = focused && typeof focused.selectionStart === 'number' ? [focused.selectionStart,focused.selectionEnd] : null;
@@ -34,10 +36,22 @@ export default function paint(component) {
     const template=document.createElement('template');template.innerHTML=data.html;
     patch(root.firstElementChild,template.content.firstElementChild);
   } else root.innerHTML=data.html;
-  if (!pageChanged && data.page==='workspace' && prior.run===data.run && data.time>prior.time && data.time-prior.time<=8 && prior.focus===data.focus && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    root.querySelectorAll('.ship-marker').forEach(el => {
-      const old=ships.get(el.dataset.ship);
-      if (old) el.animate([{transform:`translate(${old.x}px,${old.y}px)`},{transform:`translate(${el.dataset.x}px,${el.dataset.y}px)`}],{duration:data.localFrame ? 1000/data.speed : 200,easing:'linear'});
+  // Interpolate boats, domains and protection circles on the same clock.
+  // Never animate a manual seek or a change between truth and observations.
+  const tweens=[];
+  if (!pageChanged && data.page==='workspace' && prior.run===data.run && data.plot_mode===prior.plotMode && data.time>=prior.time && data.time-prior.time<=1 && (data.localFrame || prior.animating) && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const numeric=/[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi;
+    root.querySelectorAll('[data-motion]').forEach(el=>{
+      const old=motion.get(el.dataset.motion);if(!old)return;
+      motionAttrs.forEach(attr=>{
+        const target=el.getAttribute(attr), source=old[attr];
+        if(!target || !source || target===source)return;
+        let from=(source.match(numeric)||[]).map(Number), to=(target.match(numeric)||[]).map(Number);
+        if(attr==='points' && el.dataset.motion.startsWith('trace-') && from.length>=2){while(from.length<to.length)from.push(...from.slice(-2));}
+        if(from.length!==to.length || !from.length)return;
+        if(el.dataset.motion.startsWith('heading-') && attr==='transform') from[0]=to[0]-((to[0]-from[0]+540)%360-180);
+        tweens.push({el,attr,target,from,to});el.setAttribute(attr,source);
+      });
     });
   }
   Object.entries(drafts).forEach(([id, values]) => {
@@ -94,7 +108,7 @@ export default function paint(component) {
     if (file.size > 2000000) return send('client_error','文件不能超过 2 MB');
     send('restore',await file.text());
   };
-  const current = {page:data.page, run:data.run, formVersion:data.form_version, timer:null,time:data.time,focus:data.focus,downloadId:prior.downloadId};
+  const current = {page:data.page, run:data.run, formVersion:data.form_version, timer:null,time:data.time,focus:data.focus,plotMode:data.plot_mode,animationFrame:null,animating:false,downloadId:prior.downloadId};
   root.removeAttribute('aria-busy');
   if (data.download && data.download.id!==prior.downloadId) {
     current.downloadId=data.download.id;
@@ -120,6 +134,19 @@ export default function paint(component) {
     },1000/data.speed);
   }
   instances.set(parentElement,current);
+  if(tweens.length){
+    const start=performance.now(), duration=1000/data.speed;
+    current.animating=true;
+    const animate=now=>{
+      const progress=Math.min(1,(now-start)/duration);
+      tweens.forEach(({el,attr,target,from,to})=>{
+        let i=0;
+        el.setAttribute(attr,target.replace(/[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi,()=>String(from[i]+(to[i]-from[i++])*progress)));
+      });
+      if(progress<1)current.animationFrame=requestAnimationFrame(animate);else current.animating=false;
+    };
+    current.animationFrame=requestAnimationFrame(animate);
+  }
   if (pageChanged) root.scrollIntoView({block:'start',behavior:'instant'});
-  return () => {clearTimeout(instances.get(parentElement)?.timer);instances.delete(parentElement);};
+  return () => {cancelAnimationFrame(instances.get(parentElement)?.animationFrame);clearTimeout(instances.get(parentElement)?.timer);instances.delete(parentElement);};
 }

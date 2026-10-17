@@ -1,6 +1,6 @@
 """Streamlit Community Cloud entry point. Python owns all business state."""
 import streamlit as st
-from swarmeye.playback import playback_frames, advance_to_boundary, BUFFER_SECONDS
+from swarmeye.playback import playback_frames, advance_to_boundary, BUFFER_SECONDS, key_window, playback_end
 from swarmeye.component import atlas
 from swarmeye.engine import new_run, advance, decide, review, export_run, restore_run, DURATION
 from swarmeye.views import render, report
@@ -20,13 +20,17 @@ if 'site' not in st.session_state:
     st.session_state.site = {
         'page':'home', 'runs':[], 'active':None, 'playing':False,
         'notice':'', 'form_version':0, 'event':None, 'review_at':0, 'revision':0, 'scenario':'crossing','draft':preset('crossing'),
-        'speed':1,'focus':True,'domains':True,'circles':True,'download':None,
+        'speed':2,'focus':False,'domains':True,'circles':True,'download':None,
     }
 
 # Existing browser sessions can survive a cloud code reload.
-for key,value in {'scenario':'crossing','draft':preset('crossing'),'speed':1,
-                  'focus':True,'domains':True,'circles':True,'download':None}.items():
+for key,value in {'scenario':'crossing','draft':preset('crossing'),'speed':2,
+                  'focus':False,'domains':True,'circles':True,'download':None}.items():
     st.session_state.site.setdefault(key,value)
+
+for key,value in {'excerpt':True,'windows':{},'plot_mode':'actual'}.items():
+    st.session_state.site.setdefault(key,value)
+st.session_state.site['focus'] = False
 
 def parse_form(value):
     if not isinstance(value,dict):
@@ -52,7 +56,7 @@ def handle_action():
         if run and state['playing'] and event.get('run') == run['id']:
             at = max(run['time'], min(run['time'] + BUFFER_SECONDS, int(event.get('at', run['time']))))
             stopped = advance_to_boundary(run, at)
-            if stopped or run['time'] == DURATION:
+            if stopped or run['time'] >= playback_end(state,run):
                 state['playing'] = False
                 if stopped:
                     state['notice'] = '已停在新的告警或升级时刻，请查看当前证据。'
@@ -62,6 +66,8 @@ def handle_action():
             if value not in ('home','scenario','archive','about','compare'):
                 raise ValueError('页面不存在')
             state['page'], state['playing'] = value, False
+        elif action == 'playback_mode':
+            state['excerpt'] = value != 'full'
         elif action == 'scenario':
             if value not in SCENARIOS:
                 raise ValueError('场景不存在')
@@ -88,6 +94,10 @@ def handle_action():
             loaded = new_run(config=parse_form(value)) if action == 'start' else restore_run(value)
             if any(r['id'] == loaded['id'] for r in state['runs']):
                 raise ValueError('当前会话已有该运行；为保护追加记录，请勿重复导入')
+            if action == 'start' and state.get('excerpt',True):
+                window = key_window(loaded)
+                advance(loaded,window['start'])
+                state['windows'][loaded['id']] = window
             state['runs'].append(loaded)
             state.update(active=loaded['id'], page='workspace', playing=False, review_at=0)
             if action == 'restore':
@@ -109,7 +119,14 @@ def handle_action():
                 speed=int(value)
                 if speed not in (1,2,4,8): raise ValueError('请选择有效倍速')
                 state['speed']=speed
-            elif action in ('focus','domains','circles'):
+            elif action == 'full_playback':
+                state['windows'].pop(run['id'],None)
+                state['playing'] = False
+            elif action == 'plot_mode':
+                if value not in ('actual','observed'): raise ValueError('请选择有效视图')
+                state['plot_mode'] = value
+                state['playing'] = False
+            elif action in ('domains','circles'):
                 state[action]=not state.get(action,True)
             elif action in ('advance','seek','tick','next_event'):
                 if action == 'tick' and (not state['playing'] or state['page'] != 'workspace'):
@@ -132,7 +149,7 @@ def handle_action():
                     advance(run,max(run['time'],min(DURATION,until)))
                 if run['time']==DURATION: state['playing']=False
             elif action == 'play':
-                state['playing'] = not state['playing'] and run['time'] < DURATION
+                state['playing'] = not state['playing'] and run['time'] < playback_end(state,run)
             elif action == 'pause':
                 state['playing'] = False
             elif action == 'decide':
@@ -166,6 +183,6 @@ atlas({
     'revision':state.get('revision',0),
     'download':state.get('download'),
     'speed':state.get('speed',1), 'time':current['time'] if current else 0,
-    'focus':state.get('focus',True),
+    'focus':False, 'plot_mode':state.get('plot_mode','actual'),
 }, handle_action)
 state['download'] = None  # One response only; reconnects must not re-download old files.

@@ -40,7 +40,15 @@ def atlas_art():
     </svg>'''
 
 
-def chart(run, at=None, actual=False, focus=False, domains=True, circles=True, shared_span=None):
+def fixed_view(configs):
+    """One camera for all configured positions, including the initial own ship."""
+    points = [v for c in configs for t in (0, c['turn_at'], 180) for v in truth(t,c).values()]
+    xmin, xmax = min(v['x'] for v in points)-100, max(v['x'] for v in points)+100
+    ymin, ymax = min(v['y'] for v in points)-100, max(v['y'] for v in points)+100
+    return ((xmin+xmax)/2, (ymin+ymax)/2, max(xmax-xmin, (ymax-ymin)*620/490))
+
+
+def chart(run, at=None, actual=False, focus=False, domains=True, circles=True, shared_span=None, shared_view=None):
     at = run["time"] if at is None else at
     snap = run["history"][at]
     config = config_of(run)
@@ -52,8 +60,8 @@ def chart(run, at=None, actual=False, focus=False, domains=True, circles=True, s
         cx,cy=(xmin+xmax)/2,(ymin+ymax)/2
         span=max(xmax-xmin,(ymax-ymin)*620/490,420)
     else:
-        cx,cy=0,220
-        span=shared_span or max(1450,config['speed_factor']*1500,config['spacing']*3+1000)
+        cx,cy,span=shared_view or fixed_view([config])
+        if shared_span: span=max(span,shared_span)
     scale=620/span
     ymin,ymax=cy-245/scale,cy+245/scale
     xmin,xmax=cx-span/2,cx+span/2
@@ -75,12 +83,12 @@ def chart(run, at=None, actual=False, focus=False, domains=True, circles=True, s
             if v: trace.append((v['x'],v['y']))
         color='#eeeade' if ship=='OS' else '#8bdbd9'
         dash='3 4' if not actual and ship!='OS' and run['delay'] else 'none'
-        parts.append(f'<polyline points="{pts(trace)}" fill="none" stroke="{color}" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="{dash}"/>')
+        parts.append(f'<polyline data-motion="trace-{ship}" points="{pts(trace)}" fill="none" stroke="{color}" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="{dash}"/>')
     if domains:
         for group in cluster(states):
             if len(group)>1:
                 hull=convex_hull([p for ship in group for p in domain_points(states[ship])])
-                parts.append(f'<polygon points="{pts(hull)}" fill="#8ed8d2" fill-opacity=".12" stroke="#8ed8d2" stroke-opacity=".65" stroke-dasharray="4 3"/>')
+                parts.append(f'<polygon data-motion="group-{"-".join(group)}" points="{pts(hull)}" fill="#8ed8d2" fill-opacity=".12" stroke="#8ed8d2" stroke-opacity=".65" stroke-dasharray="4 3"/>')
     if not actual and snap['level']>=2 and 'OS' in states:
         own=states['OS']; ax,ay=xy(own['x'],own['y'])
         for ship,m in snap['pairs'].items():
@@ -92,10 +100,10 @@ def chart(run, at=None, actual=False, focus=False, domains=True, circles=True, s
         px,py=xy(v['x'],v['y']); heading=-math.degrees(math.atan2(v['vy'],v['vx']))
         color='#eeeade' if ship=='OS' else '#8bdbd9'
         if domains:
-            parts.append(f'<polygon points="{pts(domain_points(v))}" fill="{color}" fill-opacity=".04" stroke="{color}" stroke-opacity=".3"/>')
+            parts.append(f'<polygon data-motion="domain-{ship}" points="{pts(domain_points(v))}" fill="{color}" fill-opacity=".04" stroke="{color}" stroke-opacity=".3"/>')
         if circles:
-            parts.append(f'<circle cx="{px}" cy="{py}" r="{DOMAIN_A*scale}" fill="none" stroke="{color}" stroke-opacity=".24" stroke-dasharray="2 5"/>')
-        parts.append(f'<g class="ship-marker" data-ship="{ship}" data-x="{px}" data-y="{py}" transform="translate({px} {py})"><title>{LABELS[ship]} · E {v["x"]:.1f} m / N {v["y"]:.1f} m</title><path d="M10 0L-7-5L-4 0L-7 5Z" fill="{color}" transform="rotate({heading})"/><text x="12" y="{-18 if ship=="T2" else 20 if ship=="T3" else -10}" fill="{color}" font-size="11">{LABELS[ship]}</text></g>')
+            parts.append(f'<circle data-motion="circle-{ship}" cx="{px}" cy="{py}" r="{DOMAIN_A*scale}" fill="none" stroke="{color}" stroke-opacity=".24" stroke-dasharray="2 5"/>')
+        parts.append(f'<g data-motion="ship-{ship}" class="ship-marker" data-ship="{ship}" data-x="{px}" data-y="{py}" transform="translate({px} {py})"><title>{LABELS[ship]} · E {v["x"]:.1f} m / N {v["y"]:.1f} m</title><path data-motion="heading-{ship}" d="M10 0L-7-5L-4 0L-7 5Z" fill="{color}" transform="rotate({heading})"/><text x="12" y="{-18 if ship=="T2" else 20 if ship=="T3" else -10}" fill="{color}" font-size="11">{LABELS[ship]}</text></g>')
     parts.append('</g></svg>')
     return ''.join(parts)
 
