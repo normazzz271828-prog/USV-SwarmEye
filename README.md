@@ -31,10 +31,11 @@ uv pip install --python .venv/Scripts/python.exe -r requirements.txt
 ## 当前功能
 
 - V4 原创首页：中文衬线标题、轻玻璃场景卡、无框 SVG 会遇图谱、横向决策流程、真实会话记录入口。
-- 场景入口：一个 180 秒自建场景，0 / 20 秒延迟配对运行。
-- 工作台：因果回放、船舶域与观测聚类、L2/L3 事件、观测质量、人工处置与追加日志。
+- 场景实验室：交叉、对遇、追越三个 180 秒模板，六组预设；网页调整观测延迟、双方航速倍率、转向/离队时刻和队内间距。
+- 工作台：1×/2×/4×/8× 目标回放速度、单步、下一事件、全局/聚焦、图层开关、船位短过渡；完整逐秒计算，告警升级自动暂停。
+- 结果对比：两次已完成运行的配置差异、共享尺度双图、共同时间轴、首次事件、最高等级、L3 时长、数据不足时间及真实最近距离。
 - 档案：完成后开放当时快照与事后真值对照，追加复核意见。
-- 导出 HTML 报告和 JSON 记录，导入时重新计算并校验证据，可恢复时钟和日志。
+- 按需导出 HTML 报告和 JSON 记录，导入时重算并校验证据；保留 schema=1 的旧版记录恢复和继续演练。
 - 桌面与手机布局，无外部字体或图片网络依赖。
 
 ## 数据和方法
@@ -53,6 +54,8 @@ uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
 ```
 
 浏览器验收使用 Playwright，先安装 `playwright` 与 Chromium，再启动 `8510` 端口服务，执行 `python tests/browser_smoke.py`。截图和导出测试文件写入忽略的 `artifacts/`。见 [验收记录](docs/METHOD_AND_VALIDATION.md)。
+
+升级验收运行 `python tests/browser_upgrade.py`；也可传入线上 URL。升级范围和限制见 [V2 发布说明](docs/UPGRADE_V2.md)。网站入口：[船群之眼](https://usv-swarmeye.streamlit.app/)。
 
 ## 文件结构
 

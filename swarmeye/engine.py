@@ -11,8 +11,10 @@ from functools import lru_cache
 import json
 import math
 import uuid
+from .scenarios import validate_config, config_of, motion
+from . import legacy_v1
 
-VERSION = "demo-0.1.0"
+VERSION = "demo-0.2.0"
 DURATION = 180
 TURN_AT = 90
 DOMAIN_A, DOMAIN_B = 60.0, 35.0
@@ -35,29 +37,24 @@ PARAMETERS = {
 }
 
 
-def truth(t: int) -> dict:
-    """Synthetic motion. The turn is continuous in position, idealized in velocity."""
-    result = {"OS": {"x": 0.0, "y": -400.0 + 4*t, "vx": 0.0, "vy": 4.0}}
-    for i, ship in enumerate(SHIPS[1:]):
-        elapsed = max(0, t - TURN_AT)
-        result[ship] = {
-            "x": -450.0 - i*40 + 4.5*min(t, TURN_AT) + 1.5*elapsed,
-            "y": 120.0 + (25 if i == 1 else 0) + 4.0*elapsed,
-            "vx": 4.5 if t < TURN_AT else 1.5,
-            "vy": 0.0 if t < TURN_AT else 4.0,
-        }
-    return result
+def truth(t: int, config=None) -> dict:
+    return motion(t, validate_config(config))
 
 
-@lru_cache(maxsize=2)
-def observations(delay: int) -> tuple:
-    if delay not in (0, 20):
-        raise ValueError("仅支持 0 秒或 20 秒延迟配对场景")
-    return tuple(
+def observations(delay: int, config=None) -> tuple:
+    c = validate_config({**(config or {}), "delay": delay})
+    # Private cached serialized data; each caller receives independent dictionaries.
+    return tuple(json.loads(_observation_json(json.dumps(c,sort_keys=True))))
+
+
+@lru_cache(maxsize=24)
+def _observation_json(key):
+    c = json.loads(key)
+    return json.dumps([
         {"ship": ship, "observed_at": t,
-         "received_at": t + (0 if ship == "OS" else delay), **state}
-        for t in range(DURATION + 1) for ship, state in truth(t).items()
-    )
+         "received_at": t + (0 if ship == "OS" else c['delay']), **state}
+        for t in range(DURATION + 1) for ship,state in motion(t,c).items()
+    ])
 
 
 def latest_received(records, now: int) -> dict:
@@ -126,9 +123,10 @@ def evaluate(records, now: int) -> dict:
             "min_distance": min((m["distance"] for m in pairs.values()), default=None)}
 
 
-def new_run(delay: int = 20) -> dict:
-    observations(delay)  # validate
-    run = {"schema": 1, "version": VERSION, "id": uuid.uuid4().hex[:12],
+def new_run(delay: int = 20, config=None) -> dict:
+    c = validate_config(config if config is not None else {"delay":delay})
+    delay = c["delay"]
+    run = {"schema": 2, "config":c, "parameters":{**deepcopy(PARAMETERS),"turn_at_s":c["turn_at"]}, "version": VERSION, "id": uuid.uuid4().hex[:12],
            "created_at": datetime.now(timezone.utc).isoformat(), "delay": delay,
            "time": -1, "history": [], "events": [], "decisions": [], "reviews": [],
            "warning_count": 0, "clear_count": 0}
@@ -136,9 +134,11 @@ def new_run(delay: int = 20) -> dict:
 
 
 def advance(run: dict, until: int) -> dict:
+    if run["schema"] == 1:
+        return legacy_v1.advance(run,until)
     if type(until) is not int or not run["time"] <= until <= DURATION:
         raise ValueError("演练时钟只能向前，范围为 0–180 秒")
-    records = observations(run["delay"])
+    records = observations(run["delay"],config_of(run))
     for t in range(run["time"] + 1, until + 1):
         snapshot = evaluate(records, t)
         active = next((e for e in reversed(run["events"]) if e["end"] is None), None)
@@ -179,6 +179,8 @@ def advance(run: dict, until: int) -> dict:
 
 
 def decide(run: dict, event_id: str, action: str, reason: str, revisit: str = "") -> None:
+    if run["schema"] == 1:
+        return legacy_v1.decide(run,event_id,action,reason,revisit)
     event = next((e for e in run["events"] if e["id"] == event_id), None)
     if not event or event["end"] is not None or run["time"] == DURATION:
         raise ValueError("该事件已结束，请在复盘中追加意见")
@@ -206,7 +208,7 @@ def review(run: dict, event_id: str, status: str, note: str) -> None:
 
 
 def export_run(run: dict) -> str:
-    return json.dumps({**run, "parameters": PARAMETERS}, ensure_ascii=False, indent=2, allow_nan=False)
+    return json.dumps({**run, "parameters": run.get("parameters", PARAMETERS)}, ensure_ascii=False, indent=2, allow_nan=False)
 
 
 def restore_run(raw: str) -> dict:
@@ -215,14 +217,19 @@ def restore_run(raw: str) -> dict:
         raise ValueError("记录不能超过 2 MB")
     try:
         source = json.loads(raw)
-        if not isinstance(source, dict) or source["schema"] != 1 or source["version"] != VERSION:
+        if isinstance(source,dict) and source.get("schema") == 1:
+            return legacy_v1.restore_run(raw)
+        if not isinstance(source, dict) or source["schema"] != 2 or source["version"] != VERSION:
             raise ValueError("记录格式或方法版本不兼容")
         if type(source["delay"]) is not int or type(source["time"]) is not int or not 0 <= source["time"] <= DURATION:
             raise ValueError("场景或时钟不合法")
         if not isinstance(source["id"], str) or len(source["id"]) != 12 or any(c not in "0123456789abcdef" for c in source["id"]):
             raise ValueError("运行编号不合法")
         datetime.fromisoformat(source["created_at"])
-        run = new_run(source["delay"])
+        c = validate_config(source["config"])
+        if c["delay"] != source["delay"]:
+            raise ValueError("延迟与配置不一致")
+        run = new_run(config=c)
         run["id"], run["created_at"] = source["id"], source["created_at"]
         for decision in source["decisions"]:
             if type(decision["time"]) is not int or decision["time"] > source["time"]:
@@ -235,7 +242,7 @@ def restore_run(raw: str) -> dict:
             datetime.fromisoformat(item["recorded_at"])
             run["reviews"][-1]["recorded_at"] = item["recorded_at"]
         for key in ("events", "history", "decisions", "parameters"):
-            expected = PARAMETERS if key == "parameters" else run[key]
+            expected = run[key]
             if source.get(key) != expected:
                 raise ValueError("记录证据与重算结果不一致，无法恢复")
         return run

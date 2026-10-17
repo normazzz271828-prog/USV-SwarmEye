@@ -1,6 +1,7 @@
 """Native vector art and metre-based plots; no screenshot used as the UI."""
 import math
-from .engine import SHIPS, LABELS, DOMAIN_A, truth, convex_hull, domain_points
+from .engine import SHIPS, LABELS, DOMAIN_A, truth, convex_hull, domain_points, cluster
+from .scenarios import config_of
 
 LOGO = '''<svg viewBox="0 0 64 32" aria-hidden="true"><path d="M2 26C14 23 17 5 30 6s17 23 32 7M14 17c10-11 20 20 38 7" fill="none" stroke="currentColor" stroke-width="2"/></svg>'''
 
@@ -39,42 +40,63 @@ def atlas_art():
     </svg>'''
 
 
-def chart(run, at=None, actual=False):
+def chart(run, at=None, actual=False, focus=False, domains=True, circles=True, shared_span=None):
     at = run["time"] if at is None else at
     snap = run["history"][at]
-    states = truth(at) if actual else snap["states"]
-    # Equal scale on both axes: 0.46 px per metre, a fixed frame across time.
-    def xy(x, y): return 92+(x+620)*.46, 520-(y+450)*.46
+    config = config_of(run)
+    states = truth(at,config) if actual else snap["states"]
+    # Global bounds use only configuration and maximum allowed travel, never future states.
+    if focus and states:
+        xmin=min(v['x']-90 for v in states.values()); xmax=max(v['x']+90 for v in states.values())
+        ymin=min(v['y']-90 for v in states.values()); ymax=max(v['y']+90 for v in states.values())
+        cx,cy=(xmin+xmax)/2,(ymin+ymax)/2
+        span=max(xmax-xmin,(ymax-ymin)*620/490,420)
+    else:
+        cx,cy=0,220
+        span=shared_span or max(1450,config['speed_factor']*1500,config['spacing']*3+1000)
+    scale=620/span
+    ymin,ymax=cy-245/scale,cy+245/scale
+    xmin,xmax=cx-span/2,cx+span/2
+    def xy(x,y): return 360+(x-cx)*scale,265-(y-cy)*scale
     def pts(points): return ' '.join(f'{xy(x,y)[0]:.2f},{xy(x,y)[1]:.2f}' for x,y in points)
-    parts = ['<svg class="plot" viewBox="0 0 700 570" role="img" aria-label="船舶态势图，东向与北向坐标，单位米"><defs><pattern id="grid" width="46" height="46" patternUnits="userSpaceOnUse" x="92" y="14"><path d="M46 0H0V46" fill="none" stroke="#799aa3" stroke-opacity=".12" stroke-width=".6"/></pattern></defs><rect x="50" y="14" width="620" height="506" fill="url(#grid)"/>']
-    for x in (-400, -200, 0, 200, 400):
-        px, _ = xy(x, 0)
-        parts.append(f'<text x="{px}" y="542" class="axis" text-anchor="middle">{x}</text>')
-    for y in (-400, -200, 0, 200, 400, 600):
-        _, py = xy(0, y)
-        parts.append(f'<text x="38" y="{py+4}" class="axis" text-anchor="end">{y}</text>')
-    parts.append('<text x="654" y="559" class="axis">E / m</text><text x="17" y="15" class="axis">N / m</text><path d="M578 480h46m-46-4v8m46-8v8" stroke="#a9c5ca"/><text x="601" y="469" text-anchor="middle" class="axis">100 m</text>')
+    step=50 if span<650 else (100 if span<1300 else 200)
+    parts=['<svg class="plot" viewBox="0 0 700 570" role="img" aria-label="船舶态势图，东北米制坐标"><defs><clipPath id="plot-clip"><rect x="50" y="20" width="620" height="490"/></clipPath></defs>']
+    for x in range(math.ceil(xmin/step)*step,math.floor(xmax/step)*step+1,step):
+        px,_=xy(x,0)
+        parts.append(f'<path d="M{px} 20V510" stroke="#8dabb5" stroke-opacity=".12"/><text x="{px}" y="530" class="axis" text-anchor="middle">{x}</text>')
+    for y in range(math.ceil(ymin/step)*step,math.floor(ymax/step)*step+1,step):
+        _,py=xy(0,y)
+        parts.append(f'<path d="M50 {py}H670" stroke="#8dabb5" stroke-opacity=".12"/><text x="40" y="{py+4}" class="axis" text-anchor="end">{y}</text>')
+    parts.append(f'<text x="650" y="554" class="axis">E / m</text><text x="18" y="15" class="axis">N / m</text><path d="M{650-step*scale} 550H650" stroke="#a9c5ca"/><text x="{650-step*scale/2}" y="544" text-anchor="middle" class="axis">{step} m</text><g clip-path="url(#plot-clip)">')
     for ship in SHIPS:
-        trace = []
-        for t in range(at+1):
-            state = truth(t)[ship] if actual else run["history"][t]["states"].get(ship)
-            if state: trace.append((state["x"], state["y"]))
-        color = '#f0e9da' if ship == 'OS' else '#89d8d7'
-        dash = '2 4' if not actual and ship != 'OS' and run['delay'] else 'none'
-        parts.append(f'<polyline points="{pts(trace)}" fill="none" stroke="{color}" stroke-opacity=".6" stroke-width="1.4" stroke-dasharray="{dash}"/>')
-    for group in snap["groups"]:
-        if len(group) > 1:
-            hull = convex_hull([p for ship in group for p in domain_points(states[ship])])
-            parts.append(f'<polygon points="{pts(hull)}" fill="#8ed8d2" fill-opacity=".09" stroke="#8ed8d2" stroke-opacity=".6" stroke-dasharray="4 3"/>')
-    for ship, state in states.items():
-        px, py = xy(state['x'], state['y'])
-        heading = -math.degrees(math.atan2(state['vy'], state['vx']))
-        color = '#f0e9da' if ship == 'OS' else '#89d8d7'
-        parts.append(f'<polygon points="{pts(domain_points(state))}" fill="{color}" fill-opacity=".04" stroke="{color}" stroke-opacity=".23"/>')
-        parts.append(f'<circle cx="{px}" cy="{py}" r="{DOMAIN_A*.46}" fill="none" stroke="{color}" stroke-opacity=".18" stroke-dasharray="2 5"/>')
-        dx,dy,anchor = {'OS':(14,8,'start'),'T1':(20,3,'start'),'T2':(0,-33,'middle'),'T3':(-20,22,'end')}[ship]
-        parts.append(f'<path d="M9 0L-7-5L-4 0L-7 5Z" fill="{color}" transform="translate({px} {py}) rotate({heading})"/><text x="{px+dx}" y="{py+dy}" text-anchor="{anchor}" fill="{color}" font-size="11">{LABELS[ship]}</text>')
-    parts.append('</svg>')
+        trace=[]
+        for t in range(max(0,at-60) if focus else 0,at+1):
+            v=truth(t,config)[ship] if actual else run['history'][t]['states'].get(ship)
+            if v: trace.append((v['x'],v['y']))
+        color='#eeeade' if ship=='OS' else '#8bdbd9'
+        dash='3 4' if not actual and ship!='OS' and run['delay'] else 'none'
+        parts.append(f'<polyline points="{pts(trace)}" fill="none" stroke="{color}" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="{dash}"/>')
+    if domains:
+        for group in cluster(states):
+            if len(group)>1:
+                hull=convex_hull([p for ship in group for p in domain_points(states[ship])])
+                parts.append(f'<polygon points="{pts(hull)}" fill="#8ed8d2" fill-opacity=".12" stroke="#8ed8d2" stroke-opacity=".65" stroke-dasharray="4 3"/>')
+    if not actual and snap['level']>=2 and 'OS' in states:
+        own=states['OS']; ax,ay=xy(own['x'],own['y'])
+        for ship,m in snap['pairs'].items():
+            triggered=m['distance']<=120 or (m['tcpa'] is not None and 0<m['tcpa']<=60 and m['dcpa']<150)
+            if triggered:
+                bx,by=xy(states[ship]['x'],states[ship]['y'])
+                parts.append(f'<path d="M{ax} {ay}L{bx} {by}" stroke="#e5b47e" stroke-width="1.5" stroke-dasharray="4 5"/>')
+    for ship,v in states.items():
+        px,py=xy(v['x'],v['y']); heading=-math.degrees(math.atan2(v['vy'],v['vx']))
+        color='#eeeade' if ship=='OS' else '#8bdbd9'
+        if domains:
+            parts.append(f'<polygon points="{pts(domain_points(v))}" fill="{color}" fill-opacity=".04" stroke="{color}" stroke-opacity=".3"/>')
+        if circles:
+            parts.append(f'<circle cx="{px}" cy="{py}" r="{DOMAIN_A*scale}" fill="none" stroke="{color}" stroke-opacity=".24" stroke-dasharray="2 5"/>')
+        parts.append(f'<g class="ship-marker" data-ship="{ship}" data-x="{px}" data-y="{py}" transform="translate({px} {py})"><title>{LABELS[ship]} · E {v["x"]:.1f} m / N {v["y"]:.1f} m</title><path d="M10 0L-7-5L-4 0L-7 5Z" fill="{color}" transform="rotate({heading})"/><text x="12" y="{-18 if ship=="T2" else 20 if ship=="T3" else -10}" fill="{color}" font-size="11">{LABELS[ship]}</text></g>')
+    parts.append('</g></svg>')
     return ''.join(parts)
 
 

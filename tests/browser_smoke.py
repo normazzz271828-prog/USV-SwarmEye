@@ -1,11 +1,13 @@
 """Run with a Python environment containing Playwright and Chromium installed."""
 import json
 import math
+import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
 OUT = Path(__file__).resolve().parents[1] / 'artifacts'
 OUT.mkdir(exist_ok=True)
+URL = sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:8510'
 
 def screenshot(page,name):
     # Streamlit scrolls its main container. Expand viewport to capture all content.
@@ -22,7 +24,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={'width':1440,'height':1000},device_scale_factor=1)
     errors = []
     page.on('pageerror',lambda e: errors.append(str(e)))
-    page.goto('http://127.0.0.1:8510',wait_until='networkidle')
+    page.goto(URL,wait_until='networkidle')
     expect(page.locator('#hero-title')).to_be_visible(timeout=30000)
     page.get_by_role('button',name='平台首页',exact=True).click()
     page.wait_for_timeout(200)  # A no-op navigation must acknowledge and unlock input.
@@ -73,7 +75,7 @@ with sync_playwright() as p:
     report.value.save_as(str(OUT/'report.html'))
     assert '完整轨迹与迟到观测' in (OUT/'report.html').read_text('utf-8')
     fresh = browser.new_page(viewport={'width':390,'height':844},device_scale_factor=1)
-    fresh.goto('http://127.0.0.1:8510',wait_until='networkidle')
+    fresh.goto(URL,wait_until='networkidle')
     expect(fresh.locator('.scene-glass')).to_be_visible(timeout=30000)
     screenshot(fresh,'home-mobile.png')
     fresh.get_by_role('button',name='事件档案',exact=True).click()

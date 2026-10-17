@@ -3,6 +3,7 @@ import streamlit as st
 from swarmeye.component import atlas
 from swarmeye.engine import new_run, advance, decide, review, export_run, restore_run, DURATION
 from swarmeye.views import render, report
+from swarmeye.scenarios import preset, validate_config, SCENARIOS, config_of
 
 st.set_page_config(page_title='船群之眼 · 航迹档案', page_icon='◉', layout='wide', initial_sidebar_state='collapsed')
 # Only shell sizing; the designed site itself is isolated in a CCv2 shadow root.
@@ -17,8 +18,22 @@ body {background:#081c29}
 if 'site' not in st.session_state:
     st.session_state.site = {
         'page':'home', 'runs':[], 'active':None, 'playing':False,
-        'notice':'', 'form_version':0, 'event':None, 'review_at':0, 'revision':0,
+        'notice':'', 'form_version':0, 'event':None, 'review_at':0, 'revision':0, 'scenario':'crossing','draft':preset('crossing'),
+        'speed':1,'focus':True,'domains':True,'circles':True,'download':None,
     }
+
+# Existing browser sessions can survive a cloud code reload.
+for key,value in {'scenario':'crossing','draft':preset('crossing'),'speed':1,
+                  'focus':True,'domains':True,'circles':True,'download':None}.items():
+    st.session_state.site.setdefault(key,value)
+
+def parse_form(value):
+    if not isinstance(value,dict):
+        raise ValueError('请使用场景页面创建演练')
+    try:
+        return validate_config({k:(v if k=='scenario' else float(v)) for k,v in value.items()})
+    except (ValueError,TypeError):
+        raise ValueError('参数不合法，请使用页面提供的范围和档位') from None
 
 
 def handle_action():
@@ -30,16 +45,37 @@ def handle_action():
     state['revision'] = state.get('revision',0) + 1
     action, value = event.get('type'), event.get('value')
     state['notice'] = ''
+    state['download'] = None
     run = next((r for r in state['runs'] if r['id'] == state['active']), None)
     try:
         if action == 'nav':
-            if value not in ('home','scenario','archive','about'):
+            if value not in ('home','scenario','archive','about','compare'):
                 raise ValueError('页面不存在')
             state['page'], state['playing'] = value, False
+        elif action == 'scenario':
+            if value not in SCENARIOS:
+                raise ValueError('场景不存在')
+            state.update(scenario=value,draft=preset(value),playing=False)
+            state['form_version'] += 1
+        elif action == 'preset':
+            index=int(value)
+            if index not in (0,1): raise ValueError('请选择推荐设置')
+            state['draft']=preset(state['scenario'],index)
+            state['form_version'] += 1
+        elif action == 'preview':
+            state['draft']=parse_form(value)
+            state['form_version'] += 1
+            state['notice']='初态预览已更新，尚未创建演练。'
+        elif action in ('compare_a','compare_b'):
+            if value not in {r['id'] for r in state['runs'] if r['time']==180}:
+                raise ValueError('只能比较已完成的演练')
+            state[action]=value
+        elif action == 'compare_time':
+            state['compare_time']=max(0,min(180,int(value)))
         elif action in ('start','restore'):
             if len(state['runs']) >= 20:
                 raise ValueError('本次会话已达到 20 次演练，请下载记录后刷新页面开始新会话')
-            loaded = new_run(int(value)) if action == 'start' else restore_run(value)
+            loaded = new_run(config=parse_form(value)) if action == 'start' else restore_run(value)
             if any(r['id'] == loaded['id'] for r in state['runs']):
                 raise ValueError('当前会话已有该运行；为保护追加记录，请勿重复导入')
             state['runs'].append(loaded)
@@ -54,15 +90,37 @@ def handle_action():
         elif action == 'client_error':
             raise ValueError(str(value))
         elif run:
-            if action in ('advance','seek','tick'):
+            if action in ('download_json','download_html'):
+                state['playing']=False
+                suffix='json' if action=='download_json' else 'html'
+                content=export_run(run) if suffix=='json' else report(run)
+                state['download']={'id':state['revision'],'suffix':suffix,'content':content,'run':run['id']}
+            elif action == 'speed':
+                speed=int(value)
+                if speed not in (1,2,4,8): raise ValueError('请选择有效倍速')
+                state['speed']=speed
+            elif action in ('focus','domains','circles'):
+                state[action]=not state.get(action,True)
+            elif action in ('advance','seek','tick','next_event'):
                 if action == 'tick' and (not state['playing'] or state['page'] != 'workspace'):
                     return
-                until = int(value) if action == 'seek' else run['time'] + (2 if action == 'tick' else int(value))
-                before = run['history'][-1]['level']
-                advance(run, min(DURATION,until))
-                # Pause on an alert or upgrade so the operator can inspect evidence.
-                if run['time'] == DURATION or (run['history'][-1]['level'] >= 2 and run['history'][-1]['level'] > before):
-                    state['playing'] = False
+                step=state.get('speed',1) if action=='tick' else (180 if action=='next_event' else int(value))
+                until=int(value) if action=='seek' else run['time']+step
+                if action in ('tick','next_event'):
+                    for t in range(run['time']+1,min(DURATION,until)+1):
+                        old_level=run['history'][-1]['level']
+                        old_count=len(run['events'])
+                        advance(run,t)
+                        new_level=run['history'][-1]['level']
+                        if (new_level>=2 and new_level>old_level) or len(run['events'])>old_count:
+                            state['playing']=False
+                            state['notice']='已停在新的告警或升级时刻，请查看当前证据。'
+                            break
+                    if action=='next_event': state['playing']=False
+                else:
+                    state['playing']=False
+                    advance(run,max(run['time'],min(DURATION,until)))
+                if run['time']==DURATION: state['playing']=False
             elif action == 'play':
                 state['playing'] = not state['playing'] and run['time'] < DURATION
             elif action == 'pause':
@@ -95,6 +153,8 @@ atlas({
     'html':render(state), 'page':state['page'], 'playing':state['playing'],
     'run':current['id'] if current else '', 'form_version':state['form_version'],
     'revision':state.get('revision',0),
-    'export_json':export_run(current) if current else '',
-    'export_html':report(current) if current else '',
+    'download':state.get('download'),
+    'speed':state.get('speed',1), 'time':current['time'] if current else 0,
+    'focus':state.get('focus',True),
 }, handle_action)
+state['download'] = None  # One response only; reconnects must not re-download old files.
