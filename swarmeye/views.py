@@ -24,7 +24,8 @@ def home(state):
     runs = state['runs']
     if runs:
         recent = runs[-1]
-        row = f'<span class="archive-title">最近的演练</span><span class="eyebrow">RUN {recent["id"][:6].upper()}</span><span>{title(recent)}</span><span class="muted">{recent["time"]} / {window["end"]} s</span>{button("查看演练记录 ↗", "open_run", recent["id"], "text-button")}'
+        window = state.get('windows',{}).get(recent['id'],{'start':0,'end':180})
+        row = f'<span class="archive-title">最近的演练</span><span class="eyebrow">RUN {recent["id"][:6].upper()}</span><span>{title(recent)}</span><span class="muted">{max(0,min(recent["time"],window["end"])-window["start"]):02d} / {window["end"]-window["start"]} 秒</span>{button("查看演练记录 ↗", "open_run", recent["id"], "text-button")}'
     else:
         row = f'<span class="archive-title">场景档案</span><span class="eyebrow">06 SCENARIOS</span><span>会遇 · 转向 · 减速</span><span class="muted">十二组推荐体验 · 网页调参</span>{button("查看场景说明 ↗", "nav", "scenario", "text-button")}'
     return f'''<main class="home">
@@ -88,11 +89,11 @@ def workspace(state):
     actual = state.get('plot_mode','actual') == 'actual'
     plot_label = '仿真运动真值 · 右侧研判仅使用延迟观测' if actual else '延迟观测与外推位置 · 收到新观测时估计位置可能修正'
     window = state.get('windows',{}).get(run['id'],{'start':0,'end':DURATION})
-    excerpt = (f'<div class="excerpt-note">关键片段 {window["start"]}–{window["end"]} s · 连续播放，不跳帧。'+('本片段已结束。' if run['time']>=window['end'] else '')+'</div>') if window else ''
+    excerpt = (f'<div class="excerpt-note">动作片段 · 连续播放。'+('本片段已结束。' if run['time']>=window['end'] else '')+'</div>') if window else ''
     return f'''<main class="inner-page workspace">{page_title('DECISION WORKSPACE / '+run['id'][:6].upper(), '此刻，如何判断。', title(run)+' · 自建仿真 · 外部观测延迟 '+str(run['delay'])+' s', '<span class="mode-badge">固定视野 / 仿真与观测分离</span>')}
     {excerpt}<div class="workspace-grid"><section class="plot-panel"><div class="panel-top"><span>{SCENARIOS[config_of(run)["scenario"]][0]} / 东北米制坐标</span><span class="small muted">{len(snap['groups'])} 个外部观测群</span></div>{view_controls(state)}{chart(run,actual=actual,focus=False,domains=state.get("domains",True),circles=state.get("circles",True))}<div class="legend"><span class="legend-own">本船</span><span class="legend-target">外部目标</span><span>{plot_label}</span><span>点线圆：计算保护域</span></div></section>
     <aside class="inspection"><div class="panel-top"><span>延迟观测研判</span><span class="eyebrow">{event['id'] if active else 'OBSERVING'}</span></div><div class="inspection-content"><span class="status level-{level}">{level_text(level)}</span><p class="advice">{reason}</p><div class="quality"><span>数据质量 · {snap['quality']}</span><span>观测年龄 {age}</span></div>{evidence}{explain(run)}<details><summary>查看计算依据</summary><p class="small">演示规则 {esc(snap['rule'])} · {VERSION}。单船椭圆半轴 60 / 35 m；硬约束采用两船半径 60 m 外接圆，中心距离 ≤ 120 m 触发。预警：0 &lt; TCPA ≤ 60 s 且 DCPA &lt; 150 m，连续 3 帧。融合凸包用于群体展示。指标不是碰撞概率。</p></details>{form}</div></aside></div>
-    <section class="timeline-panel"><div class="timeline-top"><div class="actions">{controls}</div><div class="clock">{run['time']:03d}<span> / {window["end"]} s</span></div></div><label for="timeline" class="sr-only">向前推进演练时钟</label><input id="timeline" class="timeline" type="range" min="{window["start"]}" max="{window["end"]}" value="{run['time']}" data-min="{run['time']}" {'disabled' if complete else ''}><div class="timeline-labels"><span>{window["start"]:03d} s · 片段开始</span><span>逐秒计算 · 告警不中断播放</span><span>{window["end"]:03d} s · 片段结束</span></div><div class="spark-label">最近船间距离 / m</div>{sparkline(run)}</section>
+    <section class="timeline-panel"><div class="timeline-top"><div class="actions">{controls}</div><div class="clock">{max(0,min(run['time'],window["end"])-window["start"]):02d}<span> / {window["end"]-window["start"]} 秒</span></div></div><label for="timeline" class="sr-only">向前推进演练时钟</label><input id="timeline" class="timeline" type="range" min="{window["start"]}" max="{window["end"]}" value="{run['time']}" data-min="{run['time']}" {'disabled' if complete else ''}><div class="timeline-labels"><span>00 秒 · 片段开始</span><span>逐秒计算 · 告警不中断播放</span><span>{window["end"]-window["start"]:02d} 秒 · 片段结束</span></div><div class="spark-label">最近船间距离 / m</div>{sparkline(run)}</section>
     <section class="journal"><div><p class="eyebrow">DECISION JOURNAL</p><h2>判断留下痕迹。</h2></div><div>{'<ul>'+decisions+'</ul>' if decisions else '<p class="muted">尚无人工处置记录。</p>'}</div><div>{button('下载 JSON 记录 ↓','download_json',kind='secondary')}<p class="small muted">保存在本次会话；下载后可恢复。</p></div></section></main>'''
 
 

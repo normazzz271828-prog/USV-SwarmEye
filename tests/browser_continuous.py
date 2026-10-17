@@ -21,6 +21,7 @@ with sync_playwright() as p:
     assert app.get_by_role('button',name='完整过程 · 180 秒',exact=True).count()==0
     app.get_by_role('button',name='开始新演练').click()
     expect(app.locator('#timeline')).to_have_value('47')
+    expect(app.locator('.clock')).to_have_text('00 / 33 秒')
     expect(app.get_by_text('固定视野',exact=True)).to_be_visible()
     app.locator('#play-speed').select_option('8')
     app.get_by_role('button',name='播放回放',exact=True).click()
@@ -45,6 +46,9 @@ with sync_playwright() as p:
     expect(app.locator('.excerpt-note')).to_contain_text('本片段已结束')
     assert len(sent)-before_playback_messages==1, 'Only the final acknowledgement should be sent'
     assert app.get_by_role('button',name='继续完整过程',exact=True).count()==0
+    expect(app.locator('.clock')).to_have_text('33 / 33 秒')
+    app.get_by_role('button',name='平台首页',exact=True).click()
+    expect(app.locator('#hero-title')).to_be_visible()
     assert not errors, errors
     print(json.dumps({'url':url,'excerpt':'47-80','fixed_axes':True,'synchronized_motion':True,'no_position_jump':True,'errors':errors}))
     browser.close()
