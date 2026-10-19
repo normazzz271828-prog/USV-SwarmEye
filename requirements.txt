@@ -1,4 +1,4 @@
-# Rebuild cloud runtime for control-adapter-1 (2026-10-19).
+# Rebuild cloud runtime for control-adapter-2 (2026-10-19).
 # Research adapters use vectorized numerical calculations.
 streamlit==1.66.0
 numpy>=2.0,<3

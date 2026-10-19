@@ -17,11 +17,14 @@ with sync_playwright() as p:
         expect(page.locator('#research-form input[name="model"]')).to_have_value(model)
         expect(page.locator('.panel-top')).to_contain_text(['仿真参数','LOS 引导 / PID 控制'])
         page.locator('#research-time').fill('10')
-        expect(page.locator('#research-intrusion')).to_have_text('正在避让')
+        expect(page.locator('#research-intrusion')).to_have_text(__import__('re').compile('成员协调避让|外部避障|恢复队形|航线跟踪'))
         with page.expect_download() as download:page.locator('#research-export').click()
         target=out/(model+'.json');download.value.save_as(str(target));result=json.loads(target.read_text(encoding="utf8"))
         assert result['controlled'] and result['first_avoid'] is not None
+        assert result['config']['team_avoid']==1 and 'team_distance' in result['frames'][0]
+        if model=='control_o': assert result['team_events']
         page.locator('input[name="avoid_gain"]').fill('0')
+        page.locator('input[name="team_avoid"]').fill('0')
         page.get_by_role('button',name='应用并重新计算').click()
         expect(page.locator('#research-clock')).to_have_text('00')
         with page.expect_download() as download:page.locator('#research-export').click()

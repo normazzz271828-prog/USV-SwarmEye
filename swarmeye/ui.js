@@ -36,9 +36,11 @@ function mountResearch(root,result,current,send) {
     const bar=10**Math.floor(Math.log10(180/scale));ctx.strokeStyle='#afc5c9';ctx.beginPath();ctx.moveTo(780,645);ctx.lineTo(780+bar*scale,645);ctx.stroke();ctx.fillText(bar+' m',780,635);
     // Risk is computed at integer seconds: do not fabricate interpolated decisions.
     const exact=result.frames[Math.min(duration,Math.floor(at))];q('risk').textContent=exact.risk.toFixed(3);q('distance').textContent=exact.distance.toFixed(1);
+    if(q('team-distance'))q('team-distance').textContent=result.controlled?'成员最近间距 '+exact.team_distance.toFixed(1)+' m':'';
     const pair=exact.nearest_pair;
     q('pair').textContent=pair.map(j=>result.labels[j]).join(' ↔ ');
-    q('intrusion').textContent=result.controlled?(exact.avoiding?.some(Boolean)?'正在避让':'航线跟踪'):(exact.intrusion?'保护域侵入':'保护域外');q('intrusion').style.color=exact.intrusion?'#ffad8e':'#a9c6cb';
+    q('intrusion').textContent=result.controlled?(exact.team_avoiding?.some(Boolean)?'成员协调避让':exact.avoiding?.some(Boolean)?'外部避障':exact.recovering?.some(Boolean)?'恢复队形':'航线跟踪'):(exact.intrusion?'保护域侵入':'保护域外');q('intrusion').style.color=exact.intrusion?'#ffad8e':'#a9c6cb';
+    if(result.controlled && exact.team_pairs?.length){ctx.strokeStyle='#9ce8e0';ctx.setLineDash([4,5]);for(const [a,b] of exact.team_pairs){ctx.beginPath();ctx.moveTo(X(f.p[a][0]),Y(f.p[a][1]));ctx.lineTo(X(f.p[b][0]),Y(f.p[b][1]));ctx.stroke();}ctx.setLineDash([]);}
     if(exact.intrusion){ctx.strokeStyle='#ff956e';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.beginPath();pair.forEach((j,k)=>{const p=f.p[j],next=g.p[j],x=X(p[0]+(next[0]-p[0])*u),y=Y(p[1]+(next[1]-p[1])*u);k?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.setLineDash([]);ctx.lineWidth=1;}
     q('clock').textContent=String(Math.floor(at+1e-7)).padStart(2,'0');q('time').value=at;
     q('state').textContent=at>=duration?'片段结束':playing?'播放中':'已暂停';q('play').textContent=playing?'暂停':'播放';

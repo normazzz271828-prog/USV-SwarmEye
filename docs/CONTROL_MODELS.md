@@ -38,8 +38,8 @@ that would bypass control. All functions are kinematic demonstrations; no rudder
 thrust or full vessel hydrodynamics are modeled. Original speed PID saturation is
 retained; anti-windup and a separate acceleration limit are not added.
 
-The three controlled teammates are **not** included in each other's obstacle lists,
-matching the source. The source does not supply obstacle hull dimensions or a
+The original source does not include teammates as obstacles. Adapter 2 adds the
+separate coordination layer described below. The source does not supply obstacle hull dimensions or a
 collision-free guarantee. Trigger radius is not a physical hull radius. The code's
 simple side-selection heuristic is not a complete COLREGs implementation.
 
@@ -63,3 +63,46 @@ Default full computed-route closest centre distances, metres:
 
 These demonstrate improved separation on these fixtures, not safety under all
 parameters. No automatic risk pause, following camera or full-route playback is added.
+
+
+## Adapter 2: teammate coordination
+
+Engineering extension, enabled by default for O/S/Z only. Each 0.02 s step uses
+one immutable pre-integration snapshot to predict pair CPA over 12 s. Expected
+centre separation defaults to 18 m (editable 12–40 m). This is a simulation
+setting, not a certified vessel safety distance. Constant-velocity prediction can
+trigger before the current protective distance is reached.
+
+Head-on pairs both turn starboard; the following boat yields in same-course
+encounters; crossing uses fixed boat-ID priority. Yield direction is remembered
+until the pair is separating, outside the predicted conflict, and over the desired
+separation plus 8 m. Closest active conflict takes heading priority when one boat
+has multiple partners. Emergency braking affects both partners based on a
+conservative stopping-distance check. It is a heuristic, not a collision-free
+optimization or complete COLREGs controller.
+
+A yielding boat is capped at 1 m/s; emergency caps can reach zero. With the module
+on, all speed changes are limited to +0.8/-1.5 m/s². The virtual leader pauses
+while a pair is active; PID integrators decay during avoidance, and heading returns
+to the path over four seconds after release. The original speed floor cannot
+prevent emergency stopping. Setting member avoidance to zero disables this layer
+and restores source-style speed updates for comparisons.
+
+Exports include pair enter/clear events, per-frame member avoidance, recovery,
+member distance, and full-computed-route minimum distances. Cyan lines identify
+active teammate pairs. The closest-distance metric now includes both teammates
+and external obstacles; the control proximity score still measures external
+trigger-domain proximity (it is not a joint safety probability).
+
+Verification fixtures for isolated two-vessel head-on, crossing and overtaking
+(with bounded turn dynamics and bounded acceleration) remained above 18 m and
+released coordination within 60 s. Parallel formation does not trigger. Default O
+route member minimum increased from 17.692 to 18.610 m. Default S and Z member
+minima were 39.809 and 32.599 m. Full-route external obstacle centre minima with
+coordination on were 6.568, 6.411 and 18.374 m, respectively: O/S external clearance
+is smaller than with coordination off. This interaction remains a limitation;
+we do not claim that improving teammate separation guarantees external safety.
+Arbitrary user initial states (especially already-overlapping vessels), multiple
+simultaneous conflicts and all parameter extremes are not proven safe. The
+MATLAB helper package remains a reconstruction of the earlier source helpers;
+this new coordinator is implemented in the website Python engine.

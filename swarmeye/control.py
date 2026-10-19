@@ -5,6 +5,7 @@ See docs/CONTROL_MODELS.md for source differences and verification limits.
 """
 import math
 import numpy as np
+from .team_control import TeamCoordinator
 
 MODELS={'control_o':'圆形航线 · 协同避障','control_s':'S 形航线 · 协同避障','control_z':'Z 形航线 · 协同避障'}
 
@@ -24,6 +25,9 @@ def fields(model):
         'tau':('转向响应时间 / s',.35,.05,2,.05),
         'max_omega':('最大转向角速度 / rad·s⁻¹',1.,.1,1.5,.1),
         'max_rate':('转向角加速度上限 / rad·s⁻²',.9,.1,2,.1),
+        'team_avoid':('成员互避（0 关 / 1 开）',1,0,1,1),
+        'team_separation':('成员最小期望间距 / m',18,12,40,1),
+        'team_horizon':('成员预测时间 / s',12,3,30,1),
         'sync':('编队同步增益',.45 if z else .5,0,1,.05),
     }
 
@@ -77,17 +81,29 @@ def simulate(c):
     speed=base.copy()
     low=(.5*base.min() if o else 1.2 if z else 1.);high=(1.5*base.max() if o else 6.2 if z else 6.)
     sums=np.zeros(3);prev=np.zeros(3);usums=np.zeros(3);uprev=np.zeros(3);omega=np.zeros(3);memory=np.zeros(3);cmd=psi.copy()
+    coordinator=TeamCoordinator(c['team_separation'],c['team_horizon'])
+    team_active=np.zeros(3,dtype=bool);team_pairs=[];recovery=np.zeros(3);team_sample=np.zeros(3,dtype=bool)
+    team_angles=[None]*3;team_caps=np.full(3,np.inf)
+    max_acceleration=0.;previous_speed=speed.copy()
     progress=math.pi if o else 0.;frames=[];first_avoid=None;min_obstacle=math.inf;min_team=math.inf
     def snapshot(t,active):
         distances=np.linalg.norm(p[:,None,:]-obs[None,:,:],axis=2)
         i,j=np.unravel_index(np.argmin(distances),distances.shape)
+        team_distances=[(float(np.linalg.norm(p[ii]-p[jj])),ii,jj) for ii,jj in ((0,1),(0,2),(1,2))]
+        team_distance,ti,tj=min(team_distances)
+        closest=[int(i),int(j+3)];nearest=float(distances.min())
+        if team_distance<nearest:closest=[ti,tj];nearest=team_distance
         points=np.vstack([p,obs]);head=np.r_[psi,np.arctan2(ov[:,1],ov[:,0])]
         return {'p':np.round(points,4).tolist(),'heading':np.round((90-np.degrees(head))%360,3).tolist(),
-                'risk':round(float(np.maximum(0,1-distances/rr).max()),5),'distance':round(float(distances.min()),3),
-                'nearest_pair':[int(i),int(j+3)],'intrusion':bool(np.any(distances<rr)), 'domains':[],'groups':[],
-                'avoiding':[bool(a) for a in active],'omega':omega.tolist(),'speed':speed.tolist(),'time':round(t,3)}
+                'risk':round(float(np.maximum(0,1-distances/rr).max()),5),'distance':round(nearest,3),
+                'nearest_pair':closest,'intrusion':bool(np.any(distances<rr) or team_distance<c['team_separation']), 'domains':[],'groups':[],
+                'team_avoiding':team_sample.tolist(),'team_pairs':team_pairs,'team_distance':round(team_distance,3),'recovering':(recovery>0).tolist(),'avoiding':[bool(a) for a in active],'omega':omega.tolist(),'speed':speed.tolist(),'time':round(t,3)}
     frames.append(snapshot(0,[False]*3));active_sample=np.zeros(3,dtype=bool)
     for step in range(1,int(c['horizon']/dt)+1):
+        if c['team_avoid']:
+            team_angles,team_caps,team_active,team_pairs=coordinator.step(p.copy(),psi.copy(),speed.copy(),step*dt)
+            recovery=np.where(team_active,4.,np.maximum(0,recovery-dt))
+            team_sample|=team_active
         if o:
             phase=np.arctan2(p[:,1],p[:,0]-260)
             err=sum(wrap(progress-a) for a in phase)
@@ -95,6 +111,7 @@ def simulate(c):
         else:
             virtual=max((.25 if z else .2)*c['cruise'],c['cruise']-c['sync']*sum(progress-p[:,0]))
             if z:virtual=min(1.4*c['cruise'],virtual)
+        if team_active.any():virtual=0.
         progress+=virtual*dt;obs+=ov*dt
         active=np.zeros(3,dtype=bool)
         for k in range(3):
@@ -140,26 +157,41 @@ def simulate(c):
             if z:
                 if not active[k] and margin>8:memory[k]=0
                 target_angle=cmd[k]+.22*wrap(target_angle-cmd[k]);cmd[k]=target_angle
-            error=wrap(target_angle-psi[k]);sums[k]+=error*dt
+            if team_angles[k] is not None:
+                target_angle=team_angles[k]
+            elif recovery[k]>0:
+                target_angle=psi[k]+(1-recovery[k]/4)*wrap(target_angle-psi[k])
+            error=wrap(target_angle-psi[k])
+            if recovery[k]==0:sums[k]+=error*dt
+            else:sums[k]*=max(0,1-dt)
             raw=c['kp']*error+c['ki']*sums[k]+c['kd']*(error-prev[k])/dt;prev[k]=error
             omega[k]=smooth_omega(raw,omega[k],dt,c['tau'],c['max_rate'],c['max_omega'])
-            usums[k]+=uerr*dt
+            if recovery[k]==0:usums[k]+=uerr*dt
+            else:usums[k]*=max(0,1-dt)
             ku,iu,du=(.8,.02,.1) if o else (1.,.012,.08) if z else (1.,.01,.1)
-            speed[k]=max(low,min(high,base[k]+ku*uerr+iu*usums[k]+du*(uerr-uprev[k])/dt));uprev[k]=uerr
+            requested=max(low,min(high,base[k]+ku*uerr+iu*usums[k]+du*(uerr-uprev[k])/dt));uprev[k]=uerr
+            requested=min(requested,team_caps[k])
+            previous_speed[k]=speed[k]
+            if c['team_avoid']:
+                speed[k]+=max(-1.5*dt,min(.8*dt,requested-speed[k]))
+            else:speed[k]=requested
+            max_acceleration=max(max_acceleration,abs(speed[k]-previous_speed[k])/dt)
             psi[k]+=omega[k]*dt;p[k]+=speed[k]*dt*np.array([math.cos(psi[k]),math.sin(psi[k])])
+        active|=team_active
         if active.any() and first_avoid is None:first_avoid=step*dt
         active_sample|=active
         min_obstacle=min(min_obstacle,float(np.linalg.norm(p[:,None,:]-obs[None,:,:],axis=2).min()))
         min_team=min(min_team,*(float(np.linalg.norm(p[i]-p[j])) for i,j in ((0,1),(0,2),(1,2))))
         if step%50==0:
-            frames.append(snapshot(step*dt,active_sample));active_sample[:]=False
+            frames.append(snapshot(step*dt,active_sample));active_sample[:]=False;team_sample[:]=False
             if (o and progress>=3*math.pi) or (not o and np.all(p[:,0]>(620 if z else 600))):break
     start=max(0,min(len(frames)-2,int(first_avoid or 8)-8))
     duration=min(int(c['duration']),len(frames)-1-start)
     selected=frames[start:start+duration+1]
     points=np.array([f['p'] for f in selected]);lo=points.min(axis=(0,1))-50;hi=points.max(axis=(0,1))+50
     radii=[6.]*3+rr.tolist()
-    return {'version':'control-adapter-1','config':c,'start':start,'duration':duration,'frames':selected,'bounds':[*lo,*hi],
+    return {'version':'control-adapter-2','config':c,'start':start,'duration':duration,'frames':selected,'bounds':[*lo,*hi],
             'a':radii,'b':radii,'independent':3,'labels':['USV1','USV2','USV3']+[f'礁石{i+1}' if i<stat else f'目标船{i-stat+1}' for i in range(len(obs))],
             'static_indices':list(range(3,3+stat)),'controlled':True,'first_avoid':first_avoid,
-            'diagnostics':{'minimum_obstacle_center_distance':min_obstacle,'minimum_team_center_distance':min_team,'computed_seconds':len(frames)-1}}
+            'team_events':coordinator.events,
+            'diagnostics':{'max_acceleration':max_acceleration,'minimum_obstacle_center_distance':min_obstacle,'minimum_team_center_distance':min_team,'computed_seconds':len(frames)-1}}

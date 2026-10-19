@@ -63,7 +63,7 @@ def validate(raw):
             value = float(raw.get(k, default))
         except (TypeError, ValueError):
             raise ValueError(f'{label}必须是数字') from None
-        if not math.isfinite(value) or not lo <= value <= hi or (k in ('count','per_side','count_s','horizon','duration') and value != int(value)):
+        if not math.isfinite(value) or not lo <= value <= hi or (k in ('count','per_side','count_s','horizon','duration','team_avoid') and value != int(value)):
             raise ValueError(f'{label}须在 {lo:g}–{hi:g} 范围内')
         out[k] = value
     if out['duration'] > out['horizon']:

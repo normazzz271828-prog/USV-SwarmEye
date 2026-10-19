@@ -19,7 +19,7 @@ def test_smoothing_limits_reversal_and_convergence():
 
 @pytest.mark.parametrize('model',['control_o','control_s','control_z'])
 def test_control_changes_motion_and_improves_default_clearance(model):
-    c=defaults(model);on=simulate(c);off=simulate({**c,'avoid_gain':0})
+    c={**defaults(model),'team_avoid':0};on=simulate(c);off=simulate({**c,'avoid_gain':0})
     assert on['first_avoid'] is not None and off['first_avoid'] is None
     assert on['diagnostics']['minimum_obstacle_center_distance']>off['diagnostics']['minimum_obstacle_center_distance']
     assert any(any(f['avoiding']) for f in on['frames'])
