@@ -9,7 +9,7 @@ function mountResearch(root,result,current,send) {
   };
   let at=0,playing=false,last=0;
   const duration=result.duration;
-  q('time').max=duration;q('duration').textContent=duration;
+  q('time').max=duration;if(q('duration'))q('duration').textContent=duration;
   const [xmin,ymin,xmax,ymax]=result.bounds, scale=Math.min(900/(xmax-xmin),580/(ymax-ymin));
   const cx=(xmin+xmax)/2,cy=(ymin+ymax)/2, X=x=>500+(x-cx)*scale,Y=y=>340-(y-cy)*scale;
   const paths=result.labels.map((label,j)=>{const path=new Path2D();result.frames.forEach((frame,k)=>{const [x,y]=frame.p[j];k?path.lineTo(X(x),Y(y)):path.moveTo(X(x),Y(y));});return path;});
