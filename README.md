@@ -79,3 +79,6 @@ The `参数仿真` page adds source-derived triangle, S-formation and fused-doma
 
 
 The parameter console also includes O/S/Z closed-loop avoidance demonstrations ported from the supplied MATLAB scripts, with reconstructed helper functions. See [controller scope and validation](docs/CONTROL_MODELS.md). These are separate from the original risk-only models.
+
+
+Page navigation and calculation actions show immediate loading feedback, with reduced-motion support and a longer-wait status. Research replay payloads use cached gzip/base64 transport and are decoded in the browser; numerical outputs and downloads are unchanged. Default triangle payload measured 728 KB before / 167 KB after, circular control 87 KB / 26 KB (JSON UTF-8 versus base64 transport, not an end-to-end latency guarantee).

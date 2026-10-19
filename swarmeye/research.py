@@ -247,3 +247,12 @@ def _simulate(key):
 
 def simulate(raw):
     return _simulate(json.dumps(validate(raw),sort_keys=True))
+
+@lru_cache(maxsize=8)
+def _payload(key):
+    from .playback import encode_frames
+    return encode_frames(_simulate(key))
+
+def payload(raw):
+    """Cache compact compressed transport as well as the numerical result."""
+    return _payload(json.dumps(validate(raw),sort_keys=True))

@@ -97,12 +97,23 @@ function passwordDialog(root,confirm,submit) {
   };
 }
 const instances = new WeakMap();
+function showLoading(root,title) {
+  root.querySelector('.loading-overlay')?.remove();
+  const overlay=document.createElement('div');overlay.className='loading-overlay';
+  overlay.setAttribute('role','status');overlay.setAttribute('aria-live','polite');
+  overlay.innerHTML='<div class="loading-card"><div class="loading-orbit" aria-hidden="true"><i></i></div><strong></strong><p>正在准备，请稍候</p><div class="loading-track" aria-hidden="true"><i></i></div></div>';
+  overlay.querySelector('strong').textContent=title;root.appendChild(overlay);
+  return setTimeout(()=>{const p=overlay.querySelector('p');if(p)p.textContent='仍在等待云端响应，请保持页面打开';},8000);
+}
+
 export default function paint(component) {
   const {data, parentElement, setTriggerValue} = component;
   const root = parentElement.querySelector('#swarmeye-root');
   if (!root || !data) return;
   const prior = instances.get(parentElement) || {};
   clearTimeout(prior.timer);
+  clearTimeout(prior.loadingTimer);
+  root.querySelector('.loading-overlay')?.remove();
   cancelAnimationFrame(prior.animationFrame);
   const pageChanged = prior.page !== data.page;
   const motionAttrs=['transform','points','cx','cy','r'];
@@ -163,6 +174,8 @@ export default function paint(component) {
     if (busy) return;
     busy = true;
     root.setAttribute('aria-busy','true');
+    current.loadingTimer=showLoading(root,type==='nav'?'正在切换页面':type.startsWith('research_')?'正在计算仿真':'正在更新');
+    cancelAnimationFrame(current.animationFrame);
     root.querySelectorAll('button').forEach(button => {button.disabled=true;});
     clearTimeout(current.timer);
     setTriggerValue('action', {type, value, at:data.time, run:data.run});
@@ -248,6 +261,25 @@ export default function paint(component) {
   }
   if(data.research) mountResearch(root,data.research,current,send);
   instances.set(parentElement,current);
+  if(data.research_zip){
+    root.setAttribute('aria-busy','true');
+    current.loadingTimer=showLoading(root,'正在准备回放');
+    (async()=>{
+      try {
+        const bytes=Uint8Array.from(atob(data.research_zip),c=>c.charCodeAt(0));
+        const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+        const research=JSON.parse(await new Response(stream).text());
+        if(instances.get(parentElement)!==current || busy)return;
+        clearTimeout(current.loadingTimer);root.querySelector('.loading-overlay')?.remove();root.removeAttribute('aria-busy');
+        mountResearch(root,research,current,send);
+      } catch(error){
+        if(instances.get(parentElement)!==current || busy)return;
+        clearTimeout(current.loadingTimer);root.querySelector('.loading-overlay')?.remove();root.removeAttribute('aria-busy');
+        const warning=document.createElement('div');warning.className='notice';warning.setAttribute('role','alert');warning.textContent='回放加载失败，请刷新重试或使用新版浏览器。';root.prepend(warning);
+      }
+    })();
+  }
+
   if(data.frames_zip && data.playing){
     (async()=>{
       try{
@@ -272,5 +304,5 @@ export default function paint(component) {
     current.animationFrame=requestAnimationFrame(animate);
   }
   if (pageChanged) root.scrollIntoView({block:'start',behavior:'instant'});
-  return () => {cancelAnimationFrame(instances.get(parentElement)?.animationFrame);clearTimeout(instances.get(parentElement)?.timer);instances.delete(parentElement);};
+  return () => {clearTimeout(instances.get(parentElement)?.loadingTimer);cancelAnimationFrame(instances.get(parentElement)?.animationFrame);clearTimeout(instances.get(parentElement)?.timer);instances.delete(parentElement);};
 }

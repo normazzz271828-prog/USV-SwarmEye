@@ -2,7 +2,7 @@
 import streamlit as st
 from swarmeye.playback import playback_frames, advance_to_boundary, BUFFER_SECONDS, encode_frames, key_window, playback_end
 from swarmeye.component import atlas
-from swarmeye.research import defaults as research_defaults, validate as research_validate, simulate as research_simulate, MODELS as RESEARCH_MODELS
+from swarmeye.research import defaults as research_defaults, validate as research_validate, payload as research_payload, MODELS as RESEARCH_MODELS
 from swarmeye.engine import new_run, advance, decide, review, export_run, restore_run, DURATION
 from swarmeye.views import render, report
 from swarmeye.scenarios import preset, validate_config, SCENARIOS, config_of
@@ -178,7 +178,7 @@ def handle_action():
 state = st.session_state.site
 current = next((r for r in state['runs'] if r['id'] == state['active']),None)
 atlas({
-    'research':research_simulate(state.get('research_config',research_defaults())) if state['page']=='research' else None,
+    'research_zip':research_payload(state.get('research_config',research_defaults())) if state['page']=='research' else None,
     'frames_zip':encode_frames(playback_frames(state)),
     'html':render(state), 'page':state['page'], 'playing':state['playing'],
     'run':current['id'] if current else '', 'form_version':state['form_version'],

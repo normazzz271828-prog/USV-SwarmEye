@@ -70,3 +70,16 @@ def test_default_s8_f6_intrusion_is_not_hidden():
     assert np.linalg.norm(np.array(f['p'][7])-f['p'][15])==pytest.approx(15.38,abs=.02)
     assert f['intrusion']
     assert f['risk']>.6
+
+
+def test_compressed_payload_preserves_results_and_reuses_cache():
+    import base64,gzip
+    from swarmeye.research import payload, _payload
+    config=defaults()
+    encoded=payload(config)
+    decoded=json.loads(gzip.decompress(base64.b64decode(encoded)))
+    assert decoded==simulate(config)
+    assert len(encoded)<len(json.dumps(decoded))*.4
+    before=_payload.cache_info().hits
+    assert payload(config)==encoded
+    assert _payload.cache_info().hits==before+1

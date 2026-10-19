@@ -1,4 +1,4 @@
-# Rebuild cloud runtime for control-adapter-2 (2026-10-19).
+# Rebuild cloud runtime for compressed playback transport (2026-10-20).
 # Research adapters use vectorized numerical calculations.
 streamlit==1.66.0
 numpy>=2.0,<3
