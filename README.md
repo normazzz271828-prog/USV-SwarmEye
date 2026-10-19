@@ -76,3 +76,6 @@ tests/                    计算与浏览器验收
 ## Research parameter console
 
 The `参数仿真` page adds source-derived triangle, S-formation and fused-domain models. Basic/advanced settings and individual initial positions, speeds and headings are editable in the cloud. Playback is a fixed-camera client-side excerpt (default 120 seconds, adjustable 30–300 seconds) with seek, replay and 1/2/4/8× speed. See [model provenance and differences](docs/RESEARCH_MODELS.md). These are risk assessment models, not autonomous avoidance controllers.
+
+
+The parameter console also includes O/S/Z closed-loop avoidance demonstrations ported from the supplied MATLAB scripts, with reconstructed helper functions. See [controller scope and validation](docs/CONTROL_MODELS.md). These are separate from the original risk-only models.

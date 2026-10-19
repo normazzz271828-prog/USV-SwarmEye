@@ -6,8 +6,10 @@ import json
 import math
 from functools import lru_cache
 import numpy as np
+from . import control
 
 MODELS = {'triangle': '三角编队 · 量子场风险', 's_fleet': 'S 形编队 · 量子场风险', 'fusion': '船群融合 · 时空风险'}
+MODELS.update(control.MODELS)
 # name: label, default, min, max, step. Only parameters used by the adapter.
 COMMON = {
     'speed': ('航速倍率', 1, .2, 3, .1),
@@ -38,6 +40,7 @@ FUSION = {
 }
 
 def fields(model):
+    if model in control.MODELS: return control.fields(model)
     result = {**COMMON, **(FUSION if model == 'fusion' else QUANTUM)}
     if model == 'triangle':
         result.update(side=('三角边长 / m', 800, 200, 1000, 50), per_side=('每边船数', 4, 2, 8, 1))
@@ -85,6 +88,7 @@ def velocity(speed, heading):
     return np.array([speed * math.sin(a), speed * math.cos(a)])
 
 def initial(c):
+    if c['model'] in control.MODELS: return control.initial(c)
     if c['model'] == 'fusion':
         rows = [(121.22,38.325,c['own_heading'],c['own_speed'],100)]
         rows += [(x,38.40,180,15,120) for x in (121.21,121.208,121.212)]
@@ -175,7 +179,9 @@ def quantum_metrics(p,a,n,c):
 
 @lru_cache(maxsize=8)
 def _simulate(key):
-    c=json.loads(key); p,v,a,b,headings,n=initial(c)
+    c=json.loads(key)
+    if c['model'] in control.MODELS: return control.simulate(c)
+    p,v,a,b,headings,n=initial(c)
     if 'ships' in c:
         rows=np.array(c['ships']);p=rows[:,:2].copy()
         v=np.array([velocity(speed,heading) for speed,heading in rows[:,2:]])

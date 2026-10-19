@@ -32,7 +32,7 @@ def home(state):
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy"><p class="eyebrow">ENCOUNTER ATLAS / 001</p><h1 id="hero-title">看见风险的形状。<br>留下判断的依据。</h1><p class="hero-subtitle">面向无人船试验的风险决策与复盘平台</p></div>
         {atlas_art()}
-        <aside class="scene-glass"><p class="eyebrow">RESEARCH SIMULATION</p><h2>从参数，到航迹</h2><p class="scene-meta">三角编队 · S 形编队 · 船群融合</p><div class="hairline"></div><p>基础参数 / 高级参数 / 逐船初态</p>{button('打开参数控制台 <span>↗</span>', 'nav', 'research', 'primary')}</aside>
+        <aside class="scene-glass"><p class="eyebrow">RESEARCH SIMULATION</p><h2>从参数，到航迹</h2><p class="scene-meta">风险评估 · O / S / Z 闭环避障</p><div class="hairline"></div><p>基础参数 / 高级参数 / 逐船初态</p>{button('打开参数控制台 <span>↗</span>', 'nav', 'research', 'primary')}</aside>
         <span class="art-caption">航迹与边界为视觉示意。</span>
       </section>
       <section class="process" aria-label="决策记录流程"><div><p class="eyebrow">THE DECISION RECORD</p><h2>每个决定，都有来处。</h2></div><div class="step"><span>01</span><p>当时证据</p></div><span class="step-arrow">⟶</span><div class="step"><span>02</span><p>人工判断</p></div><span class="step-arrow">⟶</span><div class="step"><span>03</span><p>事后复核</p></div></section>
@@ -127,7 +127,7 @@ def archive(state):
 
 
 def about(state):
-    return f'''<main class="inner-page about-page">{page_title('ABOUT SWARMEYE', '船群之眼。', '无人船风险仿真与演练')}<div class="about-grid"><section class="method-note"><h2>参数仿真</h2><dl><div><dt>模型</dt><dd>三角编队 / S 形编队 / 船群融合</dd></div><div><dt>控制</dt><dd>基础参数 / 高级参数 / 逐船初态</dd></div><div><dt>回放</dt><dd>30–300 秒片段 / 固定视野 / 1–8 倍速</dd></div><div><dt>运行方式</dt><dd>预设航行与风险评估，无自主操纵</dd></div></dl>{button('打开参数控制台 ↗','nav','research','primary')}</section><section class="method-note"><h2>场景演练</h2><dl><div><dt>场景</dt><dd>8 类场景 / 16 组预设</dd></div><div><dt>记录</dt><dd>事件档案 / 人工处置 / 结果对比</dd></div><div><dt>保存</dt><dd>普通记录 / 浏览器加密存档</dd></div></dl>{button('进入场景 ↗','nav','scenario','secondary')}</section></div></main>'''
+    return f'''<main class="inner-page about-page">{page_title('ABOUT SWARMEYE', '船群之眼。', '无人船风险仿真与演练')}<div class="about-grid"><section class="method-note"><h2>参数仿真</h2><dl><div><dt>模型</dt><dd>三种风险模型 / O、S、Z 航线闭环避障</dd></div><div><dt>控制</dt><dd>基础参数 / 高级参数 / 逐船初态</dd></div><div><dt>回放</dt><dd>30–300 秒片段 / 固定视野 / 1–8 倍速</dd></div><div><dt>运行方式</dt><dd>风险评估 / LOS 与 PID 避障示例</dd></div></dl>{button('打开参数控制台 ↗','nav','research','primary')}</section><section class="method-note"><h2>场景演练</h2><dl><div><dt>场景</dt><dd>8 类场景 / 16 组预设</dd></div><div><dt>记录</dt><dd>事件档案 / 人工处置 / 结果对比</dd></div><div><dt>保存</dt><dd>普通记录 / 浏览器加密存档</dd></div></dl>{button('进入场景 ↗','nav','scenario','secondary')}</section></div></main>'''
 
 
 def render(state):

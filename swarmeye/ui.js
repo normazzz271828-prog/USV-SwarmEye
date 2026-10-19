@@ -9,6 +9,7 @@ function mountResearch(root,result,current,send) {
   };
   let at=0,playing=false,last=0;
   const duration=result.duration;
+  q('time').max=duration;q('duration').textContent=duration;
   const [xmin,ymin,xmax,ymax]=result.bounds, scale=Math.min(900/(xmax-xmin),580/(ymax-ymin));
   const cx=(xmin+xmax)/2,cy=(ymin+ymax)/2, X=x=>500+(x-cx)*scale,Y=y=>340-(y-cy)*scale;
   const paths=result.labels.map((label,j)=>{const path=new Path2D();result.frames.forEach((frame,k)=>{const [x,y]=frame.p[j];k?path.lineTo(X(x),Y(y)):path.moveTo(X(x),Y(y));});return path;});
@@ -28,7 +29,7 @@ function mountResearch(root,result,current,send) {
       const color=result.config.model==='fusion'&&j===0?'#f3e2a9':j<result.independent?'#a9dbd4':'#ddb684';
       ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.strokeStyle=color+'66';ctx.fillStyle=color+'09';
       ctx.beginPath();ctx.ellipse(0,result.config.model==='fusion'?-.6*result.a[j]*scale:0,result.b[j]*scale,result.a[j]*scale,0,0,Math.PI*2);ctx.fill();ctx.stroke();
-      ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(5,7);ctx.lineTo(0,4);ctx.lineTo(-5,7);ctx.closePath();ctx.fill();ctx.restore();
+      ctx.fillStyle=color;ctx.beginPath();if(result.static_indices?.includes(j)){ctx.moveTo(0,-7);ctx.lineTo(7,0);ctx.lineTo(0,7);ctx.lineTo(-7,0);}else{ctx.moveTo(0,-10);ctx.lineTo(5,7);ctx.lineTo(0,4);ctx.lineTo(-5,7);}ctx.closePath();ctx.fill();ctx.restore();
       ctx.fillStyle=color;ctx.font='12px system-ui';ctx.fillText(result.labels[j],x+9,y-10);
     });
     ctx.fillStyle='#a5bdc5';ctx.font='12px system-ui';ctx.fillText('N ↑',24,28);ctx.fillText('东 / 北 · m',24,655);
@@ -37,7 +38,7 @@ function mountResearch(root,result,current,send) {
     const exact=result.frames[Math.min(duration,Math.floor(at))];q('risk').textContent=exact.risk.toFixed(3);q('distance').textContent=exact.distance.toFixed(1);
     const pair=exact.nearest_pair;
     q('pair').textContent=pair.map(j=>result.labels[j]).join(' ↔ ');
-    q('intrusion').textContent=exact.intrusion?'保护域侵入':'保护域外';q('intrusion').style.color=exact.intrusion?'#ffad8e':'#a9c6cb';
+    q('intrusion').textContent=result.controlled?(exact.avoiding?.some(Boolean)?'正在避让':'航线跟踪'):(exact.intrusion?'保护域侵入':'保护域外');q('intrusion').style.color=exact.intrusion?'#ffad8e':'#a9c6cb';
     if(exact.intrusion){ctx.strokeStyle='#ff956e';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.beginPath();pair.forEach((j,k)=>{const p=f.p[j],next=g.p[j],x=X(p[0]+(next[0]-p[0])*u),y=Y(p[1]+(next[1]-p[1])*u);k?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.setLineDash([]);ctx.lineWidth=1;}
     q('clock').textContent=String(Math.floor(at+1e-7)).padStart(2,'0');q('time').value=at;
     q('state').textContent=at>=duration?'片段结束':playing?'播放中':'已暂停';q('play').textContent=playing?'暂停':'播放';

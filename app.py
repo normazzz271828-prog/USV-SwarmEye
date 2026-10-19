@@ -2,7 +2,7 @@
 import streamlit as st
 from swarmeye.playback import playback_frames, advance_to_boundary, BUFFER_SECONDS, encode_frames, key_window, playback_end
 from swarmeye.component import atlas
-from swarmeye.research import defaults as research_defaults, validate as research_validate, simulate as research_simulate
+from swarmeye.research import defaults as research_defaults, validate as research_validate, simulate as research_simulate, MODELS as RESEARCH_MODELS
 from swarmeye.engine import new_run, advance, decide, review, export_run, restore_run, DURATION
 from swarmeye.views import render, report
 from swarmeye.scenarios import preset, validate_config, SCENARIOS, config_of
@@ -71,7 +71,7 @@ def handle_action():
                 raise ValueError('页面不存在')
             state['page'], state['playing'] = value, False
         elif action == 'research_model':
-            if value not in ('triangle','s_fleet','fusion'):
+            if value not in RESEARCH_MODELS:
                 raise ValueError('模型不存在')
             state['research_config'] = research_defaults(value)
             state['form_version'] += 1
