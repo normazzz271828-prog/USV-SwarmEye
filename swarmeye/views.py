@@ -1,6 +1,6 @@
 from html import escape as esc
 import json
-from .explanation import explain
+from .research_view import console
 from .engine import VERSION, PARAMETERS, DURATION, truth, pair_metrics, cluster
 from .graphics import LOGO, atlas_art, chart, sparkline
 from .scenarios import config_of, title, SCENARIOS
@@ -12,7 +12,7 @@ def button(label, action, value='', kind='', extra=''):
 
 
 def header(page):
-    nav = ''.join(button(label, 'nav', key, 'nav-link active' if page == key else 'nav-link', 'aria-current="page"' if page == key else '') for key, label in [('home','平台首页'),('scenario','开始演练'),('archive','事件档案'),('compare','结果对比'),('about','关于项目')])
+    nav = ''.join(button(label, 'nav', key, 'nav-link active' if page == key else 'nav-link', 'aria-current="page"' if page == key else '') for key, label in [('home','平台首页'),('research','参数仿真'),('scenario','开始演练'),('archive','事件档案'),('compare','结果对比'),('about','关于项目')])
     return f'<header class="topbar"><button class="brand" data-action="nav" data-value="home" aria-label="船群之眼首页">{LOGO}<span>船群之眼</span></button><nav aria-label="主导航">{nav}</nav></header>'
 
 
@@ -32,7 +32,7 @@ def home(state):
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy"><p class="eyebrow">ENCOUNTER ATLAS / 001</p><h1 id="hero-title">看见风险的形状。<br>留下判断的依据。</h1><p class="hero-subtitle">面向无人船试验的风险决策与复盘平台</p></div>
         {atlas_art()}
-        <aside class="scene-glass"><p class="eyebrow">SELECTED SCENARIO</p><h2>迟到的转向观测</h2><p class="scene-meta">自建仿真 · 观测延迟 20 s</p><div class="hairline"></div><p>当时看见了什么？</p>{button('开始演练 <span>↗</span>', 'nav', 'scenario', 'primary')}</aside>
+        <aside class="scene-glass"><p class="eyebrow">RESEARCH SIMULATION</p><h2>从参数，到航迹</h2><p class="scene-meta">三角编队 · S 形编队 · 船群融合</p><div class="hairline"></div><p>基础参数 / 高级参数 / 逐船初态</p>{button('打开参数控制台 <span>↗</span>', 'nav', 'research', 'primary')}</aside>
         <span class="art-caption">航迹与边界为视觉示意。</span>
       </section>
       <section class="process" aria-label="决策记录流程"><div><p class="eyebrow">THE DECISION RECORD</p><h2>每个决定，都有来处。</h2></div><div class="step"><span>01</span><p>当时证据</p></div><span class="step-arrow">⟶</span><div class="step"><span>02</span><p>人工判断</p></div><span class="step-arrow">⟶</span><div class="step"><span>03</span><p>事后复核</p></div></section>
@@ -94,7 +94,7 @@ def workspace(state):
     excerpt = (f'<div class="excerpt-note">动作片段 · 连续播放。'+('本片段已结束。' if run['time']>=window['end'] else '')+'</div>') if window else ''
     return f'''<main class="inner-page workspace">{page_title('DECISION WORKSPACE / '+run['id'][:6].upper(), '此刻，如何判断。', title(run)+' · 自建仿真 · 外部观测延迟 '+str(run['delay'])+' s', '<span class="mode-badge">固定视野 / 仿真与观测分离</span>')}
     {excerpt}<div class="workspace-grid"><section class="plot-panel"><div class="panel-top"><span>{SCENARIOS[config_of(run)["scenario"]][0]} / 东北米制坐标</span><span class="small muted">{len(display_groups)} 个{'仿真' if actual else '观测'}群</span></div>{view_controls(state)}{chart(run,actual=actual,focus=False,domains=state.get("domains",True),circles=state.get("circles",True),field=state.get("field",True))}<div class="legend"><span class="legend-own">本船</span><span class="legend-target">外部目标</span><span>{plot_label}</span><span>点线圆：计算保护域</span>{field_note}</div></section>
-    <aside class="inspection"><div class="panel-top"><span>延迟观测研判</span><span class="eyebrow">{event['id'] if active else 'OBSERVING'}</span></div><div class="inspection-content"><span class="status level-{level}">{level_text(level)}</span><p class="advice">{reason}</p><div class="quality"><span>数据质量 · {snap['quality']}</span><span>观测年龄 {age}</span></div>{evidence}{explain(run)}<details><summary>查看计算依据</summary><p class="small">演示规则 {esc(snap['rule'])} · {VERSION}。单船椭圆半轴 60 / 35 m；硬约束采用两船半径 60 m 外接圆，中心距离 ≤ 120 m 触发。预警：0 &lt; TCPA ≤ 60 s 且 DCPA &lt; 150 m，连续 3 帧。融合凸包用于群体展示。指标不是碰撞概率。</p></details>{form}</div></aside></div>
+    <aside class="inspection"><div class="panel-top"><span>延迟观测研判</span><span class="eyebrow">{event['id'] if active else 'OBSERVING'}</span></div><div class="inspection-content"><span class="status level-{level}">{level_text(level)}</span><p class="advice">{reason}</p><div class="quality"><span>数据质量 · {snap['quality']}</span><span>观测年龄 {age}</span></div>{evidence}{form}</div></aside></div>
     <section class="timeline-panel"><div class="timeline-top"><div class="actions">{controls}</div><div class="clock">{max(0,min(run['time'],window["end"])-window["start"]):02d}<span> / {window["end"]-window["start"]} 秒</span></div></div><label for="timeline" class="sr-only">向前推进演练时钟</label><input id="timeline" class="timeline" type="range" min="{window["start"]}" max="{window["end"]}" value="{run['time']}" data-min="{run['time']}" {'disabled' if complete else ''}><div class="timeline-labels"><span>00 秒 · 片段开始</span><span>逐秒计算 · 告警不中断播放</span><span>{window["end"]-window["start"]:02d} 秒 · 片段结束</span></div><div class="spark-label">最近船间距离 / m</div>{sparkline(run)}</section>
     <section class="journal"><div><p class="eyebrow">DECISION JOURNAL</p><h2>判断留下痕迹。</h2></div><div>{'<ul>'+decisions+'</ul>' if decisions else '<p class="muted">尚无人工处置记录。</p>'}</div><div class="record-actions">{button('加密保存记录 ↓','download_encrypted',kind='secondary')}{button('下载 JSON 记录 ↓','download_json',kind='text-button')}<p class="small muted">加密文件需要密码才能恢复；普通 JSON 与 HTML 为明文。</p></div></section></main>'''
 
@@ -127,11 +127,11 @@ def archive(state):
 
 
 def about(state):
-    return f'''<main class="inner-page about-page">{page_title('ABOUT SWARMEYE', '看见风险，也看见依据。', '面向无人船试验团队的仿真决策与复盘原型。')}<div class="about-grid"><section><p class="eyebrow">WHY WE BUILD</p><h2>把一个决策时刻，<br>变成可追溯的记录。</h2><p>一条建议的价值，不只在于它是否出现。更在于能否解释当时看到了什么、人员为什么这样处理，以及事后应如何复核。</p><p>船群之眼围绕“当时证据 → 人工判断 → 事后复核”组织演练。当前提供六类会遇与本船动作场景，可在网页修改运动条件并比较已完成的运行。</p></section><section class="method-note"><p class="eyebrow">METHOD & PROVENANCE</p><h2>方法与边界</h2><dl><div><dt>数据来源</dt><dd>自建仿真，非实船记录</dd></div><div><dt>工程方法</dt><dd>观测聚类、保护域、恒速 CPA 与规则分级</dd></div><div><dt>实现版本</dt><dd>{VERSION}</dd></div><div><dt>研究状态</dt><dd>借鉴船群风险研究方向；未声称精确复现论文模型</dd></div></dl><p class="small muted">参数为演练假设，不是安全标准。指标不是碰撞概率。人工处置只记录决定，不发送船控命令。</p></section></div><section class="method-table"><h2>可复核的演练设置</h2><table><thead><tr><th>参数</th><th>值</th><th>说明</th></tr></thead><tbody><tr><td>船舶域半轴</td><td>60 / 35 m</td><td>方向跟随速度；工程演示假设</td></tr><tr><td>分群条件</td><td>120 m / 15° / 1 m·s⁻¹</td><td>距离、航向、速度差；本船排除</td></tr><tr><td>预测窗口</td><td>60 s</td><td>恒速 DCPA &lt; 150 m，连续 3 帧触发 L2</td></tr><tr><td>硬约束</td><td>中心距离 ≤ 120 m</td><td>两船半径 60 m 外接圆；立即触发 L3</td></tr><tr><td>解除条件</td><td>连续 5 帧</td><td>有效观测、无硬侵入、窗口内 DCPA ≥ 170 m 或无未来最近点</td></tr><tr><td>观测时效</td><td>≤ 30 s</td><td>超时不显示安全结论；保留原事件</td></tr></tbody></table></section></main>'''
+    return f'''<main class="inner-page about-page">{page_title('ABOUT SWARMEYE', '船群之眼。', '无人船风险仿真与演练')}<div class="about-grid"><section class="method-note"><h2>参数仿真</h2><dl><div><dt>模型</dt><dd>三角编队 / S 形编队 / 船群融合</dd></div><div><dt>控制</dt><dd>基础参数 / 高级参数 / 逐船初态</dd></div><div><dt>回放</dt><dd>33 秒片段 / 固定视野 / 1–8 倍速</dd></div><div><dt>运行方式</dt><dd>预设航行与风险评估，无自主操纵</dd></div></dl>{button('打开参数控制台 ↗','nav','research','primary')}</section><section class="method-note"><h2>场景演练</h2><dl><div><dt>场景</dt><dd>8 类场景 / 16 组预设</dd></div><div><dt>记录</dt><dd>事件档案 / 人工处置 / 结果对比</dd></div><div><dt>保存</dt><dd>普通记录 / 浏览器加密存档</dd></div></dl>{button('进入场景 ↗','nav','scenario','secondary')}</section></div></main>'''
 
 
 def render(state):
-    pages = {'home': home, 'scenario': scenario, 'workspace': workspace, 'archive': archive, 'about': about, 'compare': comparison}
+    pages = {'home': home, 'scenario': scenario, 'workspace': workspace, 'archive': archive, 'about': about, 'compare': comparison, 'research': console}
     notice = f'<div class="notice" role="status">{esc(state["notice"])}</div>' if state.get('notice') else ''
     body = pages[state['page']](state)
     body = body.replace('<div class="actions export-actions">', '<div class="actions export-actions">'+button('加密保存记录 ↓','download_encrypted',kind='primary'))

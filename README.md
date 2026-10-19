@@ -71,3 +71,8 @@ swarmeye/ui.css           V4 视觉与响应式布局
 swarmeye/ui.js            输入传输、自动回放调度、文件下载
 tests/                    计算与浏览器验收
 ```
+
+
+## Research parameter console
+
+The `参数仿真` page adds source-derived triangle, S-formation and fused-domain models. Basic/advanced settings and individual initial positions, speeds and headings are editable in the cloud. Playback is a fixed-camera 33-second client-side excerpt with seek, replay and 1/2/4/8× speed. See [model provenance and differences](docs/RESEARCH_MODELS.md). These are risk assessment models, not autonomous avoidance controllers.

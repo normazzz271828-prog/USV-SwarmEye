@@ -2,6 +2,7 @@
 import streamlit as st
 from swarmeye.playback import playback_frames, advance_to_boundary, BUFFER_SECONDS, encode_frames, key_window, playback_end
 from swarmeye.component import atlas
+from swarmeye.research import defaults as research_defaults, validate as research_validate, simulate as research_simulate
 from swarmeye.engine import new_run, advance, decide, review, export_run, restore_run, DURATION
 from swarmeye.views import render, report
 from swarmeye.scenarios import preset, validate_config, SCENARIOS, config_of
@@ -66,9 +67,20 @@ def handle_action():
         if action == 'buffer_end':
             pass
         elif action == 'nav':
-            if value not in ('home','scenario','archive','about','compare'):
+            if value not in ('home','scenario','archive','about','compare','research'):
                 raise ValueError('页面不存在')
             state['page'], state['playing'] = value, False
+        elif action == 'research_model':
+            if value not in ('triangle','s_fleet','fusion'):
+                raise ValueError('模型不存在')
+            state['research_config'] = research_defaults(value)
+            state['form_version'] += 1
+        elif action == 'research_run':
+            state['research_config'] = research_validate(value)
+            state['form_version'] += 1
+        elif action == 'research_reset':
+            state['research_config'] = research_defaults(state.get('research_config',research_defaults())['model'])
+            state['form_version'] += 1
         elif action == 'scenario':
             if value not in SCENARIOS:
                 raise ValueError('场景不存在')
@@ -166,6 +178,7 @@ def handle_action():
 state = st.session_state.site
 current = next((r for r in state['runs'] if r['id'] == state['active']),None)
 atlas({
+    'research':research_simulate(state.get('research_config',research_defaults())) if state['page']=='research' else None,
     'frames_zip':encode_frames(playback_frames(state)),
     'html':render(state), 'page':state['page'], 'playing':state['playing'],
     'run':current['id'] if current else '', 'form_version':state['form_version'],

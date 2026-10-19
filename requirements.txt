@@ -1,2 +1,3 @@
-# Refresh the Cloud build for the 2026-10-17 continuous-excerpt-only release.
+# Research adapters use vectorized numerical calculations.
 streamlit==1.66.0
+numpy>=2.0,<3

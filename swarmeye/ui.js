@@ -1,4 +1,48 @@
 // Presentation and input transport only. All simulation/rules run in Python.
+function mountResearch(root,result,current,send) {
+  const q=id=>root.querySelector('#research-'+id), canvas=q('canvas'), ctx=canvas.getContext('2d');
+  q('model').onchange=()=>send('research_model',q('model').value);
+  q('form').onsubmit=e=>{
+    e.preventDefault();const values=Object.fromEntries(new FormData(q('form')));
+    if(q('custom-ships').checked){values.ships=[];root.querySelectorAll('[data-ship-row]').forEach(input=>{const i=Number(input.dataset.shipRow);(values.ships[i]??=[])[Number(input.dataset.shipCol)]=Number(input.value);});}
+    send('research_run',values);
+  };
+  let at=0,playing=false,last=0;
+  const [xmin,ymin,xmax,ymax]=result.bounds, scale=Math.min(900/(xmax-xmin),580/(ymax-ymin));
+  const cx=(xmin+xmax)/2,cy=(ymin+ymax)/2, X=x=>500+(x-cx)*scale,Y=y=>340-(y-cy)*scale;
+  const fields=result.frames.map(f=>{if(!f.field)return null;const c=document.createElement('canvas');c.width=c.height=40;const x=c.getContext('2d'),im=x.createImageData(40,40);f.field.forEach((v,i)=>{im.data.set([115+v/3,195-v/5,181-v/3,v*.6],i*4);});x.putImageData(im,0,0);return c;});
+  function draw() {
+    const i=Math.min(32,Math.floor(at)),f=result.frames[i],g=result.frames[i+1],u=at-i;
+    ctx.clearRect(0,0,1000,680);ctx.fillStyle='#08232f';ctx.fillRect(0,0,1000,680);
+    if(fields[i]){ctx.globalAlpha=1-u;ctx.drawImage(fields[i],X(xmin),Y(ymax),(xmax-xmin)*scale,(ymax-ymin)*scale);ctx.globalAlpha=u;ctx.drawImage(fields[i+1],X(xmin),Y(ymax),(xmax-xmin)*scale,(ymax-ymin)*scale);ctx.globalAlpha=1;}
+    ctx.strokeStyle='#a4d6d315';ctx.lineWidth=1;
+    for(let k=0;k<=10;k++){const x=xmin+(xmax-xmin)*k/10,y=ymin+(ymax-ymin)*k/10;ctx.beginPath();ctx.moveTo(X(x),Y(ymin));ctx.lineTo(X(x),Y(ymax));ctx.stroke();ctx.beginPath();ctx.moveTo(X(xmin),Y(y));ctx.lineTo(X(xmax),Y(y));ctx.stroke();}
+    // Full excerpt paths keep the camera and spatial reference stable.
+    result.labels.forEach((label,j)=>{ctx.strokeStyle=j<result.independent?'#c4e0d325':'#d8b38225';ctx.beginPath();result.frames.forEach((frame,k)=>{const [x,y]=frame.p[j];k?ctx.lineTo(X(x),Y(y)):ctx.moveTo(X(x),Y(y));});ctx.stroke();});
+    f.domains.forEach((d,j)=>{const next=g.domains[j];if(!next || JSON.stringify(f.groups[j])!==JSON.stringify(g.groups[j]))return;const v=d.map((n,k)=>n+(next[k]-n)*u);ctx.strokeStyle='#e0b57b88';ctx.setLineDash([5,7]);ctx.beginPath();ctx.arc(X(v[0]),Y(v[1]),v[3]*scale,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#a4d8cc88';ctx.beginPath();ctx.arc(X(v[0]),Y(v[1]),v[2]*scale,0,Math.PI*2);ctx.stroke();});
+    f.p.forEach((p,j)=>{
+      const x=X(p[0]+(g.p[j][0]-p[0])*u),y=Y(p[1]+(g.p[j][1]-p[1])*u);
+      const delta=(g.heading[j]-f.heading[j]+540)%360-180,angle=(f.heading[j]+delta*u)*Math.PI/180;
+      const color=result.config.model==='fusion'&&j===0?'#f3e2a9':j<result.independent?'#a9dbd4':'#ddb684';
+      ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.strokeStyle=color+'66';ctx.fillStyle=color+'09';
+      ctx.beginPath();ctx.ellipse(0,result.config.model==='fusion'?-.6*result.a[j]*scale:0,result.b[j]*scale,result.a[j]*scale,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(5,7);ctx.lineTo(0,4);ctx.lineTo(-5,7);ctx.closePath();ctx.fill();ctx.restore();
+      ctx.fillStyle=color;ctx.font='12px system-ui';ctx.fillText(result.labels[j],x+9,y-10);
+    });
+    ctx.fillStyle='#a5bdc5';ctx.font='12px system-ui';ctx.fillText('N ↑',24,28);ctx.fillText('东 / 北 · m',24,655);
+    const bar=10**Math.floor(Math.log10(180/scale));ctx.strokeStyle='#afc5c9';ctx.beginPath();ctx.moveTo(780,645);ctx.lineTo(780+bar*scale,645);ctx.stroke();ctx.fillText(bar+' m',780,635);
+    // Risk is computed at integer seconds: do not fabricate interpolated decisions.
+    const exact=result.frames[Math.min(33,Math.floor(at))];q('risk').textContent=exact.risk.toFixed(3);q('distance').textContent=exact.distance.toFixed(1);
+    q('clock').textContent=String(Math.floor(at+1e-7)).padStart(2,'0');q('time').value=at;
+    q('state').textContent=at>=33?'片段结束':playing?'播放中':'已暂停';q('play').textContent=playing?'暂停':'播放';
+  }
+  function tick(now){if(playing){at=Math.min(33,at+(now-last)/1000*Number(q('speed').value));if(at>=33)playing=false;draw();}last=now;current.animationFrame=requestAnimationFrame(tick);}
+  q('play').onclick=()=>{if(at>=33)at=0;playing=!playing;last=performance.now();draw();};
+  q('replay').onclick=()=>{at=0;playing=true;last=performance.now();draw();};
+  q('time').oninput=()=>{at=Number(q('time').value);playing=false;draw();};
+  q('export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='swarmeye-research-'+result.config.model+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+  draw();last=performance.now();current.animationFrame=requestAnimationFrame(tick);
+}
 // Passwords and derived keys never enter component trigger values or storage.
 const vaultAAD = new TextEncoder().encode('SwarmEye encrypted record v1');
 const vaultIterations = 600000;
@@ -136,7 +180,7 @@ export default function paint(component) {
     if(form.closest('.vault-dialog'))return;
     form.onsubmit = e => {
       e.preventDefault();
-      send(form.id === 'scenario-form' ? 'start' : form.id === 'decision-form' ? 'decide' : 'review', Object.fromEntries(new FormData(form)));
+      send(form.id === 'research-form' ? 'research_run' : form.id === 'scenario-form' ? 'start' : form.id === 'decision-form' ? 'decide' : 'review', Object.fromEntries(new FormData(form)));
     };
     // Stop playback before editing, without dropping the first character or draft.
 
@@ -193,6 +237,7 @@ export default function paint(component) {
       }
     },1000/data.speed);
   }
+  if(data.research) mountResearch(root,data.research,current,send);
   instances.set(parentElement,current);
   if(data.frames_zip && data.playing){
     (async()=>{
