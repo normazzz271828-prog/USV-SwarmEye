@@ -21,10 +21,15 @@ with sync_playwright() as p:
     page.locator('#research-play').click()
     page.locator('#research-speed').select_option('8')
     page.locator('#research-replay').click()
-    expect(page.locator('#research-clock')).to_have_text('33',timeout=15000)
+    expect(page.locator('#research-clock')).to_have_text('120',timeout=25000)
     page.locator('#research-time').fill('12')
     expect(page.locator('#research-clock')).to_have_text('12')
     page.locator('#research-speed').select_option('2')
+    page.locator('input[name="duration"]').fill('180')
+    page.get_by_role('button',name='应用并重新计算').click()
+    expect(page.locator('#research-time')).to_have_attribute('max','180')
+    page.locator('#research-time').fill('180')
+    expect(page.locator('#research-clock')).to_have_text('180')
     for model in ('s_fleet','fusion','triangle'):
         page.locator('#research-model').select_option(model)
         expect(page.locator('#research-form input[name="model"]')).to_have_value(model)
@@ -37,7 +42,7 @@ with sync_playwright() as p:
             page.locator('#research-export').click()
         path=out/f'research-{model}.json';download.value.save_as(str(path))
         result=json.loads(path.read_text())
-        assert result['config']['speed']==1.5 and len(result['frames'])==34
+        assert result['config']['speed']==1.5 and len(result['frames'])==121
     page.get_by_text('逐船初态',exact=True).click()
     page.locator('#research-custom-ships').check()
     page.locator('[data-ship-row="0"][data-ship-col="2"]').fill('3')

@@ -57,7 +57,7 @@ The original unused speed-difference clustering constant is not exposed.
 
 - Python geographic motion is projected to a fixed local metre plane at 38.3°.
   This is a local-projection approximation rather than an exact geographic replay.
-- Both models sample one simulated second per frame; 34 samples cover a 33-second
+- Both models sample one simulated second per frame; the default 121 samples cover a 120-second
   excerpt. Source Python originally advances in 20-second steps. Continuous
   browser interpolation changes rendering only; risk readouts use actual samples.
 - Excerpt selection finds first protective-distance entry within a configurable
@@ -84,3 +84,7 @@ individual initial-state overrides. `tests/browser_research.py` checks three mod
 routes, re-computation, playback completion, seeking and exported results.
 The existing fleet/encrypted-archive browser regression remains applicable.
 MATLAB runtime execution and a full paper-result reproduction were not performed.
+
+## Configurable excerpts (adapter 2)
+
+Playback defaults to 120 seconds and accepts integer durations from 30 to 300 seconds, bounded by the search horizon. The camera remains fixed. The nearest independent-ship/fleet-point pair (own/target in fusion) is identified. Orange linking marks domain intrusion; it does not alter motion. At default triangle settings S8/F6 approach to about 15.38 m at simulation second 51, inside their combined 110 m protective radius. No avoidance controller is added.

@@ -14,6 +14,7 @@ COMMON = {
     'heading': ('全体航向偏移 / °', 0, -180, 180, 5),
     'spacing': ('初始间距倍率', 1, .5, 2, .1),
     'horizon': ('片段检索范围 / s', 600, 60, 2000, 20),
+    'duration': ('回放时长 / s', 120, 30, 300, 10),
 }
 QUANTUM = {
     'count': ('独立船数量', 10, 2, 10, 1),
@@ -59,9 +60,11 @@ def validate(raw):
             value = float(raw.get(k, default))
         except (TypeError, ValueError):
             raise ValueError(f'{label}必须是数字') from None
-        if not math.isfinite(value) or not lo <= value <= hi or (k in ('count','per_side','count_s','horizon') and value != int(value)):
+        if not math.isfinite(value) or not lo <= value <= hi or (k in ('count','per_side','count_s','horizon','duration') and value != int(value)):
             raise ValueError(f'{label}须在 {lo:g}–{hi:g} 范围内')
         out[k] = value
+    if out['duration'] > out['horizon']:
+        raise ValueError('回放时长不能超过片段检索范围')
     if 'ships' in raw:
         rows=raw['ships']
         if not isinstance(rows,list) or len(rows)!=len(initial(out)[0]):
@@ -196,20 +199,29 @@ def _simulate(key):
     def distance(frame):
         if c['model']=='fusion': return float(np.linalg.norm(frame[1:]-frame[0],axis=1).min())
         return float(np.linalg.norm(frame[:n,None,:]-frame[None,n:,:],axis=2).min())
-    # Select first domain-entry event; fallback to closest encounter. Playback remains 33 s.
+    # Select first domain-entry event; fallback to closest encounter. Playback length is configurable.
     ds=[distance(p) for p in positions]
     gate=float(a[0]+a[n]) if c['model']!='fusion' else float(a[1]*c['arena'])
     center=next((i for i,d in enumerate(ds) if d<=gate),int(np.argmin(ds)))
-    start=max(0,min(int(c['horizon'])-33,center-8))
+    duration=int(c['duration'])
+    start=max(0,min(int(c['horizon'])-duration,center-8))
     frames=[]
-    for t in range(start,start+34):
+    for t in range(start,start+duration+1):
         p=positions[t]
         if c['model']=='fusion': score,domains,groups=fusion_metrics(p,v,a,b,headings,c)
         else: score=quantum_metrics(p,a,n,c); domains=[]; groups=[]
         # Derive heading from actual movement, including reflected segments.
         motion=positions[min(t+1,len(positions)-1)]-positions[max(t-1,0)]
         angles=np.degrees(np.arctan2(motion[:,0],motion[:,1]))
-        frames.append({'p':np.round(p,3).tolist(),'heading':np.round(angles,2).tolist(),'risk':round(score,6),'distance':round(ds[t],2),'domains':domains,'groups':groups})
+        if c['model']=='fusion':
+            pair=(0,1+int(np.argmin(np.linalg.norm(p[1:]-p[0],axis=1))))
+        else:
+            distances=np.linalg.norm(p[:n,None,:]-p[None,n:,:],axis=2)
+            ii,jj=np.unravel_index(np.argmin(distances),distances.shape)
+            pair=(int(ii),int(n+jj))
+        pair_distance=float(np.linalg.norm(p[pair[0]]-p[pair[1]]))
+        intrusion=bool(pair_distance < a[pair[0]]+a[pair[1]]) if c['model']!='fusion' else any(np.linalg.norm(p[0]-d[:2])<=d[2] for d in domains)
+        frames.append({'p':np.round(p,3).tolist(),'heading':np.round(angles,2).tolist(),'risk':round(score,6),'distance':round(ds[t],2),'domains':domains,'groups':groups,'nearest_pair':list(pair),'intrusion':intrusion})
     allp=np.array([f['p'] for f in frames]); low=allp.min(axis=(0,1)); high=allp.max(axis=(0,1)); pad=max(float(a.max())*1.5,100)
     bounds=[*(low-pad),*(high+pad)]
     if c['model']!='fusion':
@@ -225,7 +237,7 @@ def _simulate(key):
                     field+=.3*.88*.8*np.exp(-d2/(2*a[j]**2))+.3*.3*np.exp(-d2/100**2)
             peak=float(field.max());frame['field_peak']=peak
             frame['field']=np.round(field/(peak or 1)*255).astype(int).ravel().tolist()
-    return {'version':'research-adapter-1','config':c,'start':start,'duration':33,'frames':frames,'bounds':bounds,'a':a.tolist(),'b':b.tolist(),'independent':n,'labels':(['OS']+[f'T{i}' for i in range(1,len(p))]) if c['model']=='fusion' else [f'S{i+1}' if i<n else f'F{i-n+1}' for i in range(len(p))]}
+    return {'version':'research-adapter-2','config':c,'start':start,'duration':duration,'frames':frames,'bounds':bounds,'a':a.tolist(),'b':b.tolist(),'independent':n,'labels':(['OS']+[f'T{i}' for i in range(1,len(p))]) if c['model']=='fusion' else [f'S{i+1}' if i<n else f'F{i-n+1}' for i in range(len(p))]}
 
 def simulate(raw):
     return _simulate(json.dumps(validate(raw),sort_keys=True))

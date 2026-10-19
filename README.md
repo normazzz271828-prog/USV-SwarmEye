@@ -75,4 +75,4 @@ tests/                    计算与浏览器验收
 
 ## Research parameter console
 
-The `参数仿真` page adds source-derived triangle, S-formation and fused-domain models. Basic/advanced settings and individual initial positions, speeds and headings are editable in the cloud. Playback is a fixed-camera 33-second client-side excerpt with seek, replay and 1/2/4/8× speed. See [model provenance and differences](docs/RESEARCH_MODELS.md). These are risk assessment models, not autonomous avoidance controllers.
+The `参数仿真` page adds source-derived triangle, S-formation and fused-domain models. Basic/advanced settings and individual initial positions, speeds and headings are editable in the cloud. Playback is a fixed-camera client-side excerpt (default 120 seconds, adjustable 30–300 seconds) with seek, replay and 1/2/4/8× speed. See [model provenance and differences](docs/RESEARCH_MODELS.md). These are risk assessment models, not autonomous avoidance controllers.

@@ -8,7 +8,7 @@ from swarmeye.research import defaults, initial, validate, simulate, quantum_met
 @pytest.mark.parametrize('model',['triangle','s_fleet','fusion'])
 def test_deterministic_short_excerpt_and_parameter_response(model):
     c=defaults(model); result=simulate(c)
-    assert len(result['frames'])==34 and result['duration']==33
+    assert len(result['frames'])==121 and result['duration']==120
     assert json.loads(json.dumps(result,allow_nan=False))==result
     assert simulate(c)==result
     changed=simulate({**c,'speed':1.5})
@@ -48,3 +48,25 @@ def test_custom_ship_positions_and_velocity_are_used():
     first=np.array(result['frames'][0]['p']);second=np.array(result['frames'][1]['p'])
     assert np.allclose(second-first,[1,0],atol=.002)
     assert np.allclose(first,p+[result['start'],0],atol=.001)
+
+
+@pytest.mark.parametrize('duration',[30,33,180,300])
+def test_configurable_excerpt(duration):
+    r=simulate({**defaults(),'duration':duration})
+    assert len(r['frames'])==duration+1
+    assert r['duration']==duration
+    assert r['start']+duration<=r['config']['horizon']
+    assert len(r['frames'][-1]['field'])==1600
+
+
+def test_duration_cannot_exceed_search_horizon():
+    with pytest.raises(ValueError):
+        validate({**defaults(),'horizon':60,'duration':120})
+
+
+def test_default_s8_f6_intrusion_is_not_hidden():
+    r=simulate(defaults())
+    f=r['frames'][51]
+    assert np.linalg.norm(np.array(f['p'][7])-f['p'][15])==pytest.approx(15.38,abs=.02)
+    assert f['intrusion']
+    assert f['risk']>.6

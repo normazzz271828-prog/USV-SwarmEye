@@ -5,7 +5,8 @@ import numpy as np
 
 
 def console(state):
-    c=state.get('research_config',defaults())
+    saved=state.get('research_config',defaults())
+    c={**defaults(saved['model']),**saved}
     options=''.join(f'<option value="{key}" {"selected" if key==c["model"] else ""}>{label}</option>' for key,label in MODELS.items())
     basic=[]; advanced=[]
     p,v,a,b,headings,n=initial(c)
@@ -24,7 +25,7 @@ def console(state):
     <section class="plot-panel"><div class="panel-top"><span>{escape(MODELS[c['model']])}</span><span>预设航行 · 无自主操纵</span></div>
     <canvas id="research-canvas" width="1000" height="680" role="img" aria-label="船群风险仿真，固定米制坐标"></canvas>
     <div class="legend"><span>船形：航向</span><span>轮廓：保护域</span><span>虚线：影响域</span></div>
-    <div class="research-metrics"><span>风险指数 <strong id="research-risk">—</strong></span><span>最近距离 <strong id="research-distance">—</strong> m</span><span id="research-state">已计算</span></div>
-    <div class="timeline-panel"><div class="timeline-top"><div class="actions"><button id="research-play" type="button" class="btn primary">播放</button><button id="research-replay" type="button" class="btn secondary">重播</button><label for="research-speed">倍速</label><select id="research-speed"><option>1</option><option selected>2</option><option>4</option><option>8</option></select><button id="research-export" type="button" class="btn text-button">导出参数与结果 ↓</button></div><div class="clock"><span id="research-clock">00</span><span> / 33 秒</span></div></div>
-    <input id="research-time" aria-label="片段时间" class="timeline" type="range" min="0" max="33" step=".01" value="0"></div>
+    <div class="research-metrics"><span>风险指数 <strong id="research-risk">—</strong></span><span>最近距离 <strong id="research-distance">—</strong> m</span><span id="research-pair"></span><span id="research-intrusion"></span><span id="research-state">已计算</span></div>
+    <div class="timeline-panel"><div class="timeline-top"><div class="actions"><button id="research-play" type="button" class="btn primary">播放</button><button id="research-replay" type="button" class="btn secondary">重播</button><label for="research-speed">倍速</label><select id="research-speed"><option>1</option><option selected>2</option><option>4</option><option>8</option></select><button id="research-export" type="button" class="btn text-button">导出参数与结果 ↓</button></div><div class="clock"><span id="research-clock">00</span><span> / {int(c['duration'])} 秒</span></div></div>
+    <input id="research-time" aria-label="片段时间" class="timeline" type="range" min="0" max="{int(c['duration'])}" step=".01" value="0"></div>
     </section></div></main>'''
