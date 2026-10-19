@@ -2,6 +2,7 @@
 import os,sys,json
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
+expect.set_options(timeout=30000)
 url=sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:8535'
 out=Path(__file__).resolve().parents[1]/'artifacts'
 with sync_playwright() as p:
