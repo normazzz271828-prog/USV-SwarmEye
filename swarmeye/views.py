@@ -1,7 +1,7 @@
 from html import escape as esc
 import json
 from .explanation import explain
-from .engine import VERSION, PARAMETERS, DURATION, truth, pair_metrics
+from .engine import VERSION, PARAMETERS, DURATION, truth, pair_metrics, cluster
 from .graphics import LOGO, atlas_art, chart, sparkline
 from .scenarios import config_of, title, SCENARIOS
 from .upgrade_views import scenario as upgraded_scenario, playback_controls, view_controls, comparison
@@ -27,7 +27,7 @@ def home(state):
         window = state.get('windows',{}).get(recent['id'],{'start':0,'end':180})
         row = f'<span class="archive-title">最近的演练</span><span class="eyebrow">RUN {recent["id"][:6].upper()}</span><span>{title(recent)}</span><span class="muted">{max(0,min(recent["time"],window["end"])-window["start"]):02d} / {window["end"]-window["start"]} 秒</span>{button("查看演练记录 ↗", "open_run", recent["id"], "text-button")}'
     else:
-        row = f'<span class="archive-title">场景档案</span><span class="eyebrow">06 SCENARIOS</span><span>会遇 · 转向 · 减速</span><span class="muted">十二组推荐体验 · 网页调参</span>{button("查看场景说明 ↗", "nav", "scenario", "text-button")}'
+        row = f'<span class="archive-title">场景档案</span><span class="eyebrow">08 SCENARIOS</span><span>会遇 · 转向 · 九船编队</span><span class="muted">十六组推荐体验 · 网页调参</span>{button("查看场景说明 ↗", "nav", "scenario", "text-button")}'
     return f'''<main class="home">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy"><p class="eyebrow">ENCOUNTER ATLAS / 001</p><h1 id="hero-title">看见风险的形状。<br>留下判断的依据。</h1><p class="hero-subtitle">面向无人船试验的风险决策与复盘平台</p></div>
@@ -75,7 +75,7 @@ def workspace(state):
     if active and not complete:
         form = f'''<form id="decision-form" class="decision-form"><input type="hidden" name="event_id" value="{active['id']}"><label for="decision-action">记录你的处置</label><select name="action" id="decision-action"><option>采纳建议</option><option>暂缓处理</option><option>驳回建议</option></select><label for="decision-reason">理由与实际行动</label><textarea id="decision-reason" name="reason" minlength="2" maxlength="1000" required placeholder="写下依据，以及实际采取的行动…"></textarea><label for="decision-revisit">复核时点或条件 <span class="muted">（暂缓时必填）</span></label><input id="decision-revisit" name="revisit" maxlength="300" placeholder="例如：10 秒后重新核实目标航向"><button class="btn primary" type="submit">保存处置记录 ↗</button><p class="small muted">记录判断，不改变仿真航迹。可手动暂停后填写。</p></form>'''
     elif complete:
-        form = f'<div class="completion-note"><h3>演练已完成</h3><p>现在可以查看完整经过，复核当时的判断。</p>{button("进入事件复盘 ↗", "nav", "archive", "primary")}</div>'
+        form = f'<div class="completion-note"><h3>片段已完成</h3><p>补齐片段后的仿真计算，再对照完整经过。已有处置记录保持不变。</p>{button("补齐计算并进入复盘 ↗", "finish_review", kind="primary")}</div>'
     else:
         form = '<div class="quiet-note">事件触发后，可在这里记录处置。</div>'
     decisions = ''.join(f'<li><span>{d["time"]:03d} s · {esc(d["action"])}</span><p>{esc(d["reason"])}</p></li>' for d in run['decisions'][-3:])
@@ -87,14 +87,16 @@ def workspace(state):
         evidence += f'<dl class="evidence"><div><dt>最近目标</dt><dd>{ship}</dd></div><div><dt>当前船间距离</dt><dd>{number(m["distance"])}</dd></div><div><dt>恒速预测 DCPA</dt><dd>{number(m["dcpa"])}</dd></div><div><dt>预测 TCPA</dt><dd>{number(m["tcpa"],"s")}</dd></div></dl>'
     controls = playback_controls(state,complete)
     actual = state.get('plot_mode','actual') == 'actual'
+    display_groups = cluster(truth(run['time'],config_of(run))) if actual else snap['groups']
+    field_note = '<span>柔光：空间影响示意，非概率、不参与分级</span>' if state.get('field',True) else ''
     plot_label = '仿真运动真值 · 右侧研判仅使用延迟观测' if actual else '延迟观测与外推位置 · 收到新观测时估计位置可能修正'
     window = state.get('windows',{}).get(run['id'],{'start':0,'end':DURATION})
     excerpt = (f'<div class="excerpt-note">动作片段 · 连续播放。'+('本片段已结束。' if run['time']>=window['end'] else '')+'</div>') if window else ''
     return f'''<main class="inner-page workspace">{page_title('DECISION WORKSPACE / '+run['id'][:6].upper(), '此刻，如何判断。', title(run)+' · 自建仿真 · 外部观测延迟 '+str(run['delay'])+' s', '<span class="mode-badge">固定视野 / 仿真与观测分离</span>')}
-    {excerpt}<div class="workspace-grid"><section class="plot-panel"><div class="panel-top"><span>{SCENARIOS[config_of(run)["scenario"]][0]} / 东北米制坐标</span><span class="small muted">{len(snap['groups'])} 个外部观测群</span></div>{view_controls(state)}{chart(run,actual=actual,focus=False,domains=state.get("domains",True),circles=state.get("circles",True))}<div class="legend"><span class="legend-own">本船</span><span class="legend-target">外部目标</span><span>{plot_label}</span><span>点线圆：计算保护域</span></div></section>
+    {excerpt}<div class="workspace-grid"><section class="plot-panel"><div class="panel-top"><span>{SCENARIOS[config_of(run)["scenario"]][0]} / 东北米制坐标</span><span class="small muted">{len(display_groups)} 个{'仿真' if actual else '观测'}群</span></div>{view_controls(state)}{chart(run,actual=actual,focus=False,domains=state.get("domains",True),circles=state.get("circles",True),field=state.get("field",True))}<div class="legend"><span class="legend-own">本船</span><span class="legend-target">外部目标</span><span>{plot_label}</span><span>点线圆：计算保护域</span>{field_note}</div></section>
     <aside class="inspection"><div class="panel-top"><span>延迟观测研判</span><span class="eyebrow">{event['id'] if active else 'OBSERVING'}</span></div><div class="inspection-content"><span class="status level-{level}">{level_text(level)}</span><p class="advice">{reason}</p><div class="quality"><span>数据质量 · {snap['quality']}</span><span>观测年龄 {age}</span></div>{evidence}{explain(run)}<details><summary>查看计算依据</summary><p class="small">演示规则 {esc(snap['rule'])} · {VERSION}。单船椭圆半轴 60 / 35 m；硬约束采用两船半径 60 m 外接圆，中心距离 ≤ 120 m 触发。预警：0 &lt; TCPA ≤ 60 s 且 DCPA &lt; 150 m，连续 3 帧。融合凸包用于群体展示。指标不是碰撞概率。</p></details>{form}</div></aside></div>
     <section class="timeline-panel"><div class="timeline-top"><div class="actions">{controls}</div><div class="clock">{max(0,min(run['time'],window["end"])-window["start"]):02d}<span> / {window["end"]-window["start"]} 秒</span></div></div><label for="timeline" class="sr-only">向前推进演练时钟</label><input id="timeline" class="timeline" type="range" min="{window["start"]}" max="{window["end"]}" value="{run['time']}" data-min="{run['time']}" {'disabled' if complete else ''}><div class="timeline-labels"><span>00 秒 · 片段开始</span><span>逐秒计算 · 告警不中断播放</span><span>{window["end"]-window["start"]:02d} 秒 · 片段结束</span></div><div class="spark-label">最近船间距离 / m</div>{sparkline(run)}</section>
-    <section class="journal"><div><p class="eyebrow">DECISION JOURNAL</p><h2>判断留下痕迹。</h2></div><div>{'<ul>'+decisions+'</ul>' if decisions else '<p class="muted">尚无人工处置记录。</p>'}</div><div>{button('下载 JSON 记录 ↓','download_json',kind='secondary')}<p class="small muted">保存在本次会话；下载后可恢复。</p></div></section></main>'''
+    <section class="journal"><div><p class="eyebrow">DECISION JOURNAL</p><h2>判断留下痕迹。</h2></div><div>{'<ul>'+decisions+'</ul>' if decisions else '<p class="muted">尚无人工处置记录。</p>'}</div><div class="record-actions">{button('加密保存记录 ↓','download_encrypted',kind='secondary')}{button('下载 JSON 记录 ↓','download_json',kind='text-button')}<p class="small muted">加密文件需要密码才能恢复；普通 JSON 与 HTML 为明文。</p></div></section></main>'''
 
 
 def archive(state):
@@ -131,7 +133,11 @@ def about(state):
 def render(state):
     pages = {'home': home, 'scenario': scenario, 'workspace': workspace, 'archive': archive, 'about': about, 'compare': comparison}
     notice = f'<div class="notice" role="status">{esc(state["notice"])}</div>' if state.get('notice') else ''
-    return f'<div class="site {"landing" if state["page"] == "home" else "interior"}">{header(state["page"])}{notice}{pages[state["page"]](state)}{footer()}</div>'
+    body = pages[state['page']](state)
+    body = body.replace('<div class="actions export-actions">', '<div class="actions export-actions">'+button('加密保存记录 ↓','download_encrypted',kind='primary'))
+    body = body.replace('accept=".json,application/json"', 'accept=".json,.swarm,application/json"')
+    body = body.replace('恢复 JSON 记录', '恢复普通 / 加密记录').replace('导入 JSON 记录', '导入普通或加密记录')
+    return f'<div class="site {"landing" if state["page"] == "home" else "interior"}">{header(state["page"])}{notice}{body}{footer()}</div>'
 
 
 def report(run):

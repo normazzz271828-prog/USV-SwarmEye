@@ -16,7 +16,7 @@ def encode_frames(frames):
 
 def key_window(run):
     """Editorial excerpt of a deterministic demo, never a risk prediction."""
-    from .scenarios import config_of
+    from .scenarios import config_of, FLEET_SCENARIOS
     preview = deepcopy(run)
     advance(preview, DURATION)
     nearest = min((h for h in preview['history'] if h['min_distance'] is not None),
@@ -24,7 +24,7 @@ def key_window(run):
     turn = config_of(run)['turn_at']
     anchor = turn if turn < DURATION else nearest
     start = max(0, anchor - 8)
-    end = min(DURATION, anchor + 25)
+    end = min(DURATION, anchor + (40 if config_of(run)['scenario'] in FLEET_SCENARIOS else 25))
     return {'start': start, 'end': end}
 
 

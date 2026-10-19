@@ -1,6 +1,6 @@
 """Scenario controls and completed-run comparisons for the browser UI."""
 from html import escape
-from .scenarios import SCENARIOS, PRESETS, preset, config_of, title
+from .scenarios import SCENARIOS, PRESETS, preset, config_of, title, ship_ids
 from .engine import new_run, truth, pair_metrics
 from .graphics import chart, fixed_view
 
@@ -21,11 +21,11 @@ def scenario(state):
     # Preview the configured initial geometry, never a future outcome.
     initial['history'][0]['states']=truth(0,draft)
     preview=chart(initial)
-    return f'''<main class="inner-page">{page_title('SCENARIO LAB / 06','从一次会遇开始。','六种情境，十二组推荐体验。直接在网页调整条件，开始自己的演练。')}
+    return f'''<main class="inner-page">{page_title('场景实验室 / 08','从一次会遇开始。','八种情境，十六组推荐体验。新增九船编队，观察群体边界随运动变化。')}
     <div class="scenario-layout"><aside class="scenario-index"><p class="eyebrow">选择会遇情境</p>{options}<div class="small muted">所有场景均为自建仿真。每次修改都会创建独立记录。</div></aside>
     <section class="scenario-detail"><div class="scenario-preview">{preview}<div class="preview-caption"><span class="eyebrow">INITIAL CONDITIONS</span><h2>{name}</h2><p>{description}</p><small>完整初态预览 · 不是演练已收到的观测</small></div></div>
     <div class="detail-content"><div class="actions"><span class="small muted">推荐设置</span>{presets}</div>
-    <p class="small muted">关键片段从预设动作前 8 秒开始，看到动作后 25 秒；默认 2×，约 17 秒观看。保持航向场景围绕最近接近时刻展示。告警只更新提示，播放不中断。</p><form id="scenario-form"><input type="hidden" name="scenario" value="{selected}"><div class="parameter-grid">{controls}</div><p class="small muted">动作片段回放 · 1 本船 + 3 外部船 · 1 s 计算步长。航速倍率改变双方真实运动；回放倍率只改变观看速度。时刻 180 s 表示演练内保持原航向。新增本船动作场景采用 8 秒连续速度过渡；动作均由场景预设，并非算法自主避碰。</p><div class="actions"><button type="submit" class="btn primary">开始新演练 ↗</button><button type="button" class="btn secondary" data-action="preview">更新初态预览</button></div></form>
+    <p class="small muted">从预设动作前 8 秒开始，连续播放至动作后 25 秒。九船编队扩展至动作后 40 秒，以呈现 24 秒连续转向；告警更新提示，播放不中断。</p><form id="scenario-form"><input type="hidden" name="scenario" value="{selected}"><div class="parameter-grid">{controls}</div><p class="small muted">1 本船 + {len(ship_ids(draft))-1} 外部船 · 1 s 计算步长。航速倍率改变真实运动，回放倍率改变观看速度。时刻 180 s 表示保持原航向。轨迹由独立的解析运动模型生成；动作预设，不是自主避碰或已标定动力学。</p><div class="actions"><button type="submit" class="btn primary">开始新演练 ↗</button><button type="button" class="btn secondary" data-action="preview">更新初态预览</button></div></form>
     <div class="actions">{resume}<label class="file-button">恢复 JSON 记录<input id="import-file" type="file" accept=".json,application/json" aria-label="导入 JSON 演练记录"></label></div><p class="small muted">当前设置不保证触发告警；跨越分群阈值时，外部编队可能分裂。</p></div></section></div></main>'''
 
 
@@ -46,7 +46,7 @@ def playback_controls(state,complete):
 def view_controls(state):
     from .views import button
     mode=state.get('plot_mode','actual')
-    return '<div class="plot-controls actions"><span class="small muted">固定视野</span>'+button('仿真运动','plot_mode','actual','secondary' if mode=='actual' else 'text-button')+button('延迟观测','plot_mode','observed','secondary' if mode=='observed' else 'text-button')+button('隐藏船舶域' if state.get('domains',True) else '显示船舶域','domains',kind='text-button')+button('隐藏保护圆' if state.get('circles',True) else '显示保护圆','circles',kind='text-button')+'</div>'
+    return '<div class="plot-controls actions"><span class="small muted">固定视野</span>'+button('仿真运动','plot_mode','actual','secondary' if mode=='actual' else 'text-button')+button('延迟观测','plot_mode','observed','secondary' if mode=='observed' else 'text-button')+button('隐藏船舶域' if state.get('domains',True) else '显示船舶域','domains',kind='text-button')+button('隐藏保护圆' if state.get('circles',True) else '显示保护圆','circles',kind='text-button')+button('隐藏空间影响层' if state.get('field',True) else '显示空间影响层','field',kind='text-button')+'</div>'
 
 
 
@@ -64,7 +64,7 @@ def comparison(state):
         options=''.join(f'<option value="{r["id"]}" {"selected" if r["id"]==run["id"] else ""}>{title(r)} / {r["id"][:6]}</option>' for r in finished)
         return f'<label for="{key}">运行 {"A" if key=="compare-a" else "B"}</label><select id="{key}">{options}</select>'
     def metrics(run):
-        minimum=min(pair_metrics(truth(t,config_of(run))['OS'],truth(t,config_of(run))[s])['distance'] for t in range(181) for s in ('T1','T2','T3'))
+        minimum=min(pair_metrics(truth(t,config_of(run))['OS'],truth(t,config_of(run))[s])['distance'] for t in range(181) for s in ship_ids(config_of(run))[1:])
         return [str(run['events'][0]['start'])+' s' if run['events'] else '未触发',f'L{max(h["level"] for h in run["history"])}',str(sum(h['level']==3 for h in run['history'][:-1]))+' s',str(sum(not h['valid'] for h in run['history'][:-1]))+' s',f'{minimum:.1f} m']
     la,lb=metrics(left),metrics(right)
     rows=''.join(f'<tr><td>{name}</td><td>{a}</td><td>{b}</td></tr>' for name,a,b in zip(['首次事件','最高等级','L3 累计时长','数据不足时长','真实最小距离'],la,lb))

@@ -2,6 +2,8 @@
 
 以「航迹档案」为视觉主题的无人船风险决策与复盘原型。Python 3.12 + Streamlit 1.66.0，采用 Custom Components v2 承载原创玻璃界面与 SVG 航迹；计算、事件和记录由 Python 统一管理。
 
+2026-10-19 更新：新增九船三角编队与 S 形编队，共八类场景、十六组预设；增加可开关的空间影响示意层、加重融合轮廓与紧凑船号。片段结束可补齐计算并进入完整复盘。演练记录可在浏览器以密码加密为 `.swarm` 文件，并通过导入解密恢复。独立演示实现，不包含保密研究源码或原始数据。详见 [编队与加密存档说明](docs/FLEET_RELEASE.md)。
+
 ## 本地运行
 
 ```powershell
@@ -31,11 +33,11 @@ uv pip install --python .venv/Scripts/python.exe -r requirements.txt
 ## 当前功能
 
 - V4 原创首页：中文衬线标题、轻玻璃场景卡、无框 SVG 会遇图谱、横向决策流程、真实会话记录入口。
-- 场景实验室：交叉、对遇、追越、本船右转、减速让行、反向交叉六个 180 秒模板，十二组预设；网页调整观测延迟、双方航速倍率、转向/离队时刻和队内间距。
-- 工作台：1×/2×/4×/8× 目标回放速度、单步、下一事件、全局/聚焦、图层开关、船位短过渡；完整逐秒计算，告警升级自动暂停。
+- 场景实验室：交叉、对遇、追越、本船右转、减速让行、反向交叉、三角编队、S 形编队八个模板，十六组预设；网页调整观测延迟、航速倍率、转向/离队时刻和队内间距。
+- 工作台：1×/2×/4×/8× 目标回放速度、手动步进、固定视野、图层开关；连续动作片段、同步船位与边界动画，告警更新不中断播放。
 - 结果对比：两次已完成运行的配置差异、共享尺度双图、共同时间轴、首次事件、最高等级、L3 时长、数据不足时间及真实最近距离。
 - 档案：完成后开放当时快照与事后真值对照，追加复核意见。
-- 按需导出 HTML 报告和 JSON 记录，导入时重算并校验证据；保留 schema=1 的旧版记录恢复和继续演练。
+- 按需导出 HTML 报告、JSON 记录和密码加密的 `.swarm` 存档，恢复时重算并校验证据；保留 schema=1 的旧版记录恢复和继续演练。
 - 桌面与手机布局，无外部字体或图片网络依赖。
 
 ## 数据和方法
@@ -55,7 +57,7 @@ uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
 
 浏览器验收使用 Playwright，先安装 `playwright` 与 Chromium，再启动 `8510` 端口服务，执行 `python tests/browser_smoke.py`。截图和导出测试文件写入忽略的 `artifacts/`。见 [验收记录](docs/METHOD_AND_VALIDATION.md)。
 
-升级验收运行 `python tests/browser_upgrade.py`；也可传入线上 URL。升级范围和限制见 [V2 发布说明](docs/UPGRADE_V2.md)。网站入口：[船群之眼](https://usv-swarmeye.streamlit.app/)。
+本次编队与加密验收运行 `python tests/browser_fleet_release.py`；也可传入线上 URL。旧的浏览器脚本保留历史流程，未必适用于最新片段操作；当前发布范围见 [编队与加密存档说明](docs/FLEET_RELEASE.md)。网站入口：[船群之眼](https://usv-swarmeye.streamlit.app/)。
 
 ## 文件结构
 

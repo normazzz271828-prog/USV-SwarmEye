@@ -11,7 +11,7 @@ from functools import lru_cache
 import json
 import math
 import uuid
-from .scenarios import validate_config, config_of, motion
+from .scenarios import validate_config, config_of, motion, ship_ids
 from . import legacy_v1
 
 VERSION = "demo-0.2.0"
@@ -23,7 +23,7 @@ HORIZON = 60
 WARNING_DISTANCE = 150.0
 HARD_DISTANCE = 2 * DOMAIN_A
 SHIPS = ("OS", "T1", "T2", "T3")
-LABELS = {"OS": "本船", "T1": "外部船 01", "T2": "外部船 02", "T3": "外部船 03"}
+LABELS = {"OS": "本船", **{f"T{i}": f"外部船 {i:02d}" for i in range(1,10)}}
 PARAMETERS = {
     "duration_s": DURATION, "sample_s": 1, "turn_at_s": TURN_AT,
     "domain_a_m": DOMAIN_A, "domain_b_m": DOMAIN_B,
@@ -106,10 +106,10 @@ def pair_metrics(own: dict, target: dict) -> dict:
             "closing": rx*vx + ry*vy < -1e-9}
 
 
-def evaluate(records, now: int) -> dict:
+def evaluate(records, now: int, expected=SHIPS) -> dict:
     states = latest_received(records, now)
-    valid = all(s in states and states[s]["age"] <= MAX_AGE for s in SHIPS)
-    pairs = {s: pair_metrics(states["OS"], states[s]) for s in SHIPS[1:]
+    valid = all(s in states and states[s]["age"] <= MAX_AGE for s in expected)
+    pairs = {s: pair_metrics(states["OS"], states[s]) for s in expected[1:]
              if "OS" in states and s in states}
     level, rule = 0, "DQ-01"
     if valid:
@@ -139,8 +139,9 @@ def advance(run: dict, until: int) -> dict:
     if type(until) is not int or not run["time"] <= until <= DURATION:
         raise ValueError("演练时钟只能向前，范围为 0–180 秒")
     records = observations(run["delay"],config_of(run))
+    expected = ship_ids(config_of(run))
     for t in range(run["time"] + 1, until + 1):
-        snapshot = evaluate(records, t)
+        snapshot = evaluate(records, t, expected)
         active = next((e for e in reversed(run["events"]) if e["end"] is None), None)
         raw = snapshot["raw_level"]
         run["warning_count"] = run["warning_count"]+1 if raw == 2 else 0
@@ -167,7 +168,7 @@ def advance(run: dict, until: int) -> dict:
         if level >= 2 and snapshot["valid"]:
             if active is None:
                 active = {"id": f"EV-{len(run['events'])+1:03d}", "start": t,
-                          "end": None, "participants": list(SHIPS), "peak": level,
+                          "end": None, "participants": list(expected), "peak": level,
                           "snapshot": deepcopy(snapshot), "updates": []}
                 run["events"].append(active)
             if not active["updates"] or active["updates"][-1]["level"] != level:

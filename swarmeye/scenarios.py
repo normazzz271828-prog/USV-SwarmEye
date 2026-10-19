@@ -1,4 +1,4 @@
-"""Validated public controls for three deterministic four-ship templates."""
+"""Independent, synthetic demonstration scenarios; no research source/data imports."""
 import math
 
 SCENARIOS = {
@@ -8,6 +8,8 @@ SCENARIOS = {
     'own_turn': ('本船转向', '对遇中的右转', '本船连续右转，与保持原航向的参考线比较。'),
     'slow_yield': ('减速让行', '交叉中的减速', '本船连续减速，让横穿船群先通过。'),
     'port_cross': ('反向交叉', '右侧来船与转向', '目标从右向左横穿，比较本船提前与延后转向。'),
+    'triangle_fleet': ('三角编队', '三角编队的交叉会遇', '九艘目标保持三角结构，观察群体边界随运动变化。'),
+    's_fleet': ('S 形编队', 'S 形编队的转向', '九艘目标形成 S 形结构，比较实际运动与迟到观测。'),
 }
 DEFAULT = dict(scenario='crossing', delay=20, speed_factor=1.0, turn_at=90, spacing=40)
 PRESETS = {
@@ -17,17 +19,25 @@ PRESETS = {
     'own_turn': [('提前右转',dict(delay=0,turn_at=55)),('延后右转',dict(delay=0,turn_at=90))],
     'slow_yield': [('提前减速',dict(delay=0,turn_at=50)),('延后减速',dict(delay=0,turn_at=80))],
     'port_cross': [('提前转向',dict(delay=0,turn_at=50)),('延后转向',dict(delay=0,turn_at=85))],
+    'triangle_fleet': [('连续转向',dict(delay=0,turn_at=85)),('迟到观测',dict(delay=20,turn_at=85))],
+    's_fleet': [('即时观测',dict(delay=0,turn_at=90)),('迟到观测',dict(delay=20,turn_at=90))],
 }
 
 OWN_ACTIONS = {'own_turn':'本船右转', 'slow_yield':'本船减速', 'port_cross':'本船转向'}
+FLEET_SCENARIOS = {'triangle_fleet', 's_fleet'}
 
 
-def smooth_motion(t, turn, origin, before, after):
+def ship_ids(config):
+    count = 9 if config['scenario'] in FLEET_SCENARIOS else 3
+    return ('OS',) + tuple(f'T{i+1}' for i in range(count))
+
+
+def smooth_motion(t, turn, origin, before, after, duration=8):
     """Eight-second smooth velocity transition; illustrative, not calibrated dynamics."""
     elapsed=max(0,t-turn)
-    u=min(1,elapsed/8)
+    u=min(1,elapsed/duration)
     blend=u*u*(3-2*u)
-    integral=8*(u**3-u**4/2)+max(0,elapsed-8)
+    integral=duration*(u**3-u**4/2)+max(0,elapsed-duration)
     return dict(x=origin[0]+before[0]*t+(after[0]-before[0])*integral,
                 y=origin[1]+before[1]*t+(after[1]-before[1])*integral,
                 vx=before[0]+(after[0]-before[0])*blend,
@@ -68,6 +78,25 @@ def motion(t,c):
     if turn == 180:
         turn = 181  # The UI's "keep original heading" setting includes the final sample.
     before,after = min(t,turn),max(0,t-turn)
+    if c['scenario'] in FLEET_SCENARIOS:
+        # Public geometric primitives and an analytic kinematic model, independently
+        # authored here. No confidential archives, paths, values or source are loaded.
+        result = {'OS': dict(x=0., y=-360+4*k*t, vx=0., vy=4*k)}
+        centre = smooth_motion(t, turn, (-410, 80), (4*k, 0), (1.5*k, 3.6*k), duration=24)
+        if c['scenario'] == 'triangle_fleet':
+            offsets = [((1-row)*spacing, (col-(width-1)/2)*spacing)
+                       for row, width in enumerate((1, 3, 5)) for col in range(width)]
+        else:
+            offsets = [((i-4)*spacing*.8, math.sin((i-4)*math.pi/4)*spacing*1.4)
+                       for i in range(9)]
+        angle = .15*math.sin(t/45)
+        omega = .15/45*math.cos(t/45)
+        cs, sn = math.cos(angle), math.sin(angle)
+        for i, (u, v) in enumerate(offsets):
+            dx, dy = cs*u-sn*v, sn*u+cs*v
+            result[f'T{i+1}'] = dict(x=centre['x']+dx, y=centre['y']+dy,
+                                     vx=centre['vx']-omega*dy, vy=centre['vy']+omega*dx)
+        return result
     if c['scenario'] in OWN_ACTIONS:
         kind=c['scenario']
         start=(0,-400) if kind=='own_turn' else (0,-300)

@@ -1,4 +1,48 @@
 // Presentation and input transport only. All simulation/rules run in Python.
+// Passwords and derived keys never enter component trigger values or storage.
+const vaultAAD = new TextEncoder().encode('SwarmEye encrypted record v1');
+const vaultIterations = 600000;
+const toBase64 = bytes => {
+  let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));
+  return btoa(text);
+};
+const fromBase64 = value => Uint8Array.from(atob(value), c=>c.charCodeAt(0));
+async function vaultKey(password,salt,usage) {
+  if(!globalThis.crypto?.subtle)throw new Error('当前浏览器不支持加密，请使用 HTTPS 或本机地址访问。');
+  const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:vaultIterations,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,[usage]);
+}
+async function sealRecord(raw,password) {
+  const salt=crypto.getRandomValues(new Uint8Array(16)), nonce=crypto.getRandomValues(new Uint8Array(12));
+  const key=await vaultKey(password,salt,'encrypt');
+  const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv:nonce,additionalData:vaultAAD,tagLength:128},key,new TextEncoder().encode(raw));
+  return JSON.stringify({format:'swarmeye-encrypted',version:1,algorithm:'AES-256-GCM',kdf:'PBKDF2-SHA256',iterations:vaultIterations,salt:toBase64(salt),nonce:toBase64(nonce),data:toBase64(new Uint8Array(encrypted))});
+}
+async function unsealRecord(envelope,password) {
+  if(envelope.version!==1 || envelope.algorithm!=='AES-256-GCM' || envelope.kdf!=='PBKDF2-SHA256' || envelope.iterations!==vaultIterations)throw new Error('加密记录格式不兼容。');
+  try {
+    const salt=fromBase64(envelope.salt), nonce=fromBase64(envelope.nonce), bytes=fromBase64(envelope.data);
+    if(salt.length!==16 || nonce.length!==12 || bytes.length<16 || bytes.length>2000016)throw new Error('size');
+    const key=await vaultKey(password,salt,'decrypt');
+    const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:nonce,additionalData:vaultAAD,tagLength:128},key,bytes);
+    return new TextDecoder('utf-8',{fatal:true}).decode(raw);
+  }catch(error){throw new Error('密码不正确，或加密文件已损坏；请检查后重试。');}
+}
+function passwordDialog(root,confirm,submit) {
+  const dialog=document.createElement('dialog');dialog.className='vault-dialog';
+  dialog.innerHTML=`<form method="dialog"><h2>${confirm?'加密保存演练记录':'解锁演练记录'}</h2><p>${confirm?'密码只在当前浏览器用于加密，不会传给服务器。请自行保管，平台无法找回。':'密码在当前浏览器解密；确认后将恢复的演练记录交给服务器校验。'}</p><label for="vault-password">${confirm?'设置密码（至少 12 个字符）':'存档密码'}</label><input id="vault-password" type="password" autocomplete="${confirm?'new-password':'off'}" minlength="${confirm?12:1}" maxlength="128" required>${confirm?'<label for="vault-confirm">再次输入密码</label><input id="vault-confirm" type="password" autocomplete="new-password" minlength="12" maxlength="128" required>':''}<p class="vault-error" role="alert"></p><div class="actions"><button type="submit" class="btn primary">${confirm?'加密并下载':'解密并恢复'}</button><button type="button" class="btn secondary vault-cancel">取消</button></div></form>`;
+  root.appendChild(dialog);dialog.showModal();
+  const close=()=>{dialog.querySelectorAll('input').forEach(input=>input.value='');dialog.close();dialog.remove();};
+  dialog.querySelector('.vault-cancel').onclick=close;
+  dialog.addEventListener('cancel',()=>dialog.remove());
+  dialog.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();e.stopPropagation();
+    const input=dialog.querySelector('#vault-password'), again=dialog.querySelector('#vault-confirm');
+    if(again && input.value!==again.value){dialog.querySelector('.vault-error').textContent='两次输入的密码不一致。';return;}
+    const buttons=dialog.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);
+    try{await submit(input.value);close();}catch(error){dialog.querySelector('.vault-error').textContent=error.message;buttons.forEach(b=>b.disabled=false);}
+  };
+}
 const instances = new WeakMap();
 export default function paint(component) {
   const {data, parentElement, setTriggerValue} = component;
@@ -17,6 +61,7 @@ export default function paint(component) {
   const drafts = {};
   if (!pageChanged && prior.run === data.run && prior.formVersion === data.form_version) {
     root.querySelectorAll('form').forEach(form => {
+      if(form.closest('.vault-dialog'))return;
       drafts[form.id] = Object.fromEntries(new FormData(form));
     });
   }
@@ -79,6 +124,11 @@ export default function paint(component) {
     const target = e.target.closest('[data-action]');
     if (!target || target.disabled) return;
     const action = target.dataset.action;
+    if(action==='download_encrypted'){
+      if(!globalThis.crypto?.subtle)return send('client_error','加密功能需要新版浏览器及 HTTPS 连接。');
+      if(data.playing)return send('client_error','请先暂停回放，再加密保存当前时刻。');
+      passwordDialog(root,true,password=>{current.pendingSecret=password;send('download_encrypted');});return;
+    }
     const value = action === 'preview' ? Object.fromEntries(new FormData(root.querySelector('#scenario-form'))) : target.dataset.value;
     send(action, value);
   };
@@ -106,14 +156,22 @@ export default function paint(component) {
   if (upload) upload.onchange = async () => {
     const file = upload.files[0];
     if (!file) return;
-    if (file.size > 2000000) return send('client_error','文件不能超过 2 MB');
-    send('restore',await file.text());
+    if (file.size > 2800000) return send('client_error','文件过大，普通记录上限 2 MB，加密记录上限 2.8 MB');
+    const raw=await file.text();let parsed;
+    try{parsed=JSON.parse(raw);}catch(error){return send('client_error','无法读取记录，请选择导出的 JSON 或 .swarm 文件。');}
+    if(parsed?.format==='swarmeye-encrypted'){
+      passwordDialog(root,false,async password=>{const restored=await unsealRecord(parsed,password);send('restore',restored);});
+    }else send('restore',raw);
   };
-  const current = {page:data.page, run:data.run, formVersion:data.form_version, timer:null,time:data.time,focus:data.focus,plotMode:data.plot_mode,animationFrame:null,animating:false,downloadId:prior.downloadId};
+  const current = {page:data.page, run:data.run, formVersion:data.form_version, timer:null,time:data.time,focus:data.focus,plotMode:data.plot_mode,animationFrame:null,animating:false,downloadId:prior.downloadId,pendingSecret:prior.run===data.run?prior.pendingSecret:null};
   root.removeAttribute('aria-busy');
   if (data.download && data.download.id!==prior.downloadId) {
     current.downloadId=data.download.id;
-    download(data.download.content,data.download.suffix,data.download.suffix==='json'?'application/json;charset=utf-8':'text/html;charset=utf-8');
+    if(data.download.suffix==='swarm'){
+      const password=current.pendingSecret;current.pendingSecret=null;
+      if(password)sealRecord(data.download.content,password).then(content=>download(content,'swarm','application/json;charset=utf-8')).catch(()=>send('client_error','加密失败，请重新设置密码并保存。'));
+      else send('client_error','密码已失效，请重新点击加密保存。');
+    }else download(data.download.content,data.download.suffix,data.download.suffix==='json'?'application/json;charset=utf-8':'text/html;charset=utf-8');
   }
   if (focusId && prior.formVersion === data.form_version) {
     const nextFocus = root.querySelector('#'+CSS.escape(focusId));

@@ -28,7 +28,7 @@ for key,value in {'scenario':'crossing','draft':preset('crossing'),'speed':2,
                   'focus':False,'domains':True,'circles':True,'download':None}.items():
     st.session_state.site.setdefault(key,value)
 
-for key,value in {'excerpt':True,'windows':{},'plot_mode':'actual'}.items():
+for key,value in {'excerpt':True,'windows':{},'plot_mode':'actual','field':True}.items():
     st.session_state.site.setdefault(key,value)
 st.session_state.site['focus'] = False
 for saved in st.session_state.site['runs']:
@@ -105,16 +105,24 @@ def handle_action():
         elif action in ('open_run','select_run'):
             if value not in {r['id'] for r in state['runs']}:
                 raise ValueError('运行不存在')
+            selected = next(r for r in state['runs'] if r['id'] == value)
             state.update(active=value, playing=False, review_at=0,
-                         page='workspace' if action == 'open_run' else 'archive')
+                         page='workspace' if action == 'open_run' and selected['time'] < DURATION else 'archive')
         elif action == 'client_error':
             raise ValueError(str(value))
         elif run:
-            if action in ('download_json','download_html'):
+            if action in ('download_json','download_html','download_encrypted'):
                 state['playing']=False
-                suffix='json' if action=='download_json' else 'html'
-                content=export_run(run) if suffix=='json' else report(run)
+                suffix='swarm' if action=='download_encrypted' else ('json' if action=='download_json' else 'html')
+                content=export_run(run) if suffix in ('json','swarm') else report(run)
                 state['download']={'id':state['revision'],'suffix':suffix,'content':content,'run':run['id']}
+            elif action == 'finish_review':
+                if run['time'] < playback_end(state,run):
+                    raise ValueError('请先观看至当前片段末尾')
+                state['playing'] = False
+                advance(run, DURATION)
+                state.update(page='archive', review_at=0)
+                state['notice'] = '已补齐片段后的仿真计算，完整复盘已开放；原始处置记录保留。'
             elif action == 'speed':
                 speed=int(value)
                 if speed not in (1,2,4,8): raise ValueError('请选择有效倍速')
@@ -123,7 +131,7 @@ def handle_action():
                 if value not in ('actual','observed'): raise ValueError('请选择有效视图')
                 state['plot_mode'] = value
                 state['playing'] = False
-            elif action in ('domains','circles'):
+            elif action in ('domains','circles','field'):
                 state[action]=not state.get(action,True)
             elif action in ('advance','seek'):
                 until=int(value) if action=='seek' else run['time']+int(value)
