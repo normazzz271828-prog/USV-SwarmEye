@@ -33,7 +33,7 @@ def ship_ids(config):
 
 
 def smooth_motion(t, turn, origin, before, after, duration=8):
-    """Eight-second smooth velocity transition; illustrative, not calibrated dynamics."""
+    """Smooth velocity transition; illustrative, not calibrated dynamics."""
     elapsed=max(0,t-turn)
     u=min(1,elapsed/duration)
     blend=u*u*(3-2*u)

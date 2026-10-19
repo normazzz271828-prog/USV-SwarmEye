@@ -133,6 +133,7 @@ export default function paint(component) {
     send(action, value);
   };
   root.querySelectorAll('form').forEach(form => {
+    if(form.closest('.vault-dialog'))return;
     form.onsubmit = e => {
       e.preventDefault();
       send(form.id === 'scenario-form' ? 'start' : form.id === 'decision-form' ? 'decide' : 'review', Object.fromEntries(new FormData(form)));

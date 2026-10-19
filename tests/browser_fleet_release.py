@@ -1,6 +1,7 @@
 """Browser acceptance of the public synthetic release; no research data is used."""
 import base64
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -18,7 +19,9 @@ def ready(page):
 
 
 with sync_playwright() as playwright:
-    browser = playwright.chromium.launch(headless=True)
+    proxy = {'server':os.environ['SWARMEYE_BROWSER_PROXY']} if os.environ.get('SWARMEYE_BROWSER_PROXY') else None
+    browser = playwright.chromium.launch(headless=True,proxy=proxy,
+                                         args=['--disable-http2','--disable-quic'] if proxy else [])
     context = browser.new_context(viewport={'width':1440,'height':1050}, accept_downloads=True)
     page = context.new_page()
     errors, sent = [], []
