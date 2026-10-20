@@ -36,7 +36,9 @@ whole-second boundary after route completion. Per-ship overrides set positions,
 headings and base cruise speeds for controlled ships, rather than a constant speed
 that would bypass control. All functions are kinematic demonstrations; no rudder,
 thrust or full vessel hydrodynamics are modeled. Original speed PID saturation is
-retained; anti-windup and a separate acceleration limit are not added.
+retained and no separate acceleration limit is added. A speed-loop anti-windup
+term is active only in the coordinated mode, where external deflection and an
+integrating speed error would otherwise combine into a windup.
 
 The original source does not include teammates as obstacles. Adapter 2 adds the
 separate coordination layer described below. The source does not supply obstacle hull dimensions or a
@@ -54,6 +56,8 @@ covers all three models, changing avoidance strength, export, 8x replay and mobi
 layout.
 
 Default full computed-route closest centre distances, metres:
+
+Base controller only, member coordination switched off:
 
 | Route | Avoidance off | Avoidance on | Minimum teammate distance (on) |
 |---|---:|---:|---:|
@@ -81,10 +85,18 @@ has multiple partners. Emergency braking affects both partners based on a
 conservative stopping-distance check. It is a heuristic, not a collision-free
 optimization or complete COLREGs controller.
 
+### Joint clearance with external obstacles
+
 A yielding boat is capped at 1 m/s; emergency caps can reach zero. With the module
-on, all speed changes are limited to +0.8/-1.5 m/s². The virtual leader pauses
-while a pair is active; PID integrators decay during avoidance, and heading returns
-to the path over four seconds after release. The original speed floor cannot
+on, all speed changes are limited to +0.8/-1.5 m/s². PID integrators decay during
+avoidance, and heading returns to the path over four seconds after release. The
+formation clock is no longer frozen while a pair is active: the yield headings and
+speed caps resolve the pair, whereas a stopped clock left a catch-up demand that
+made ships accelerate through external trigger domains after release. Pair
+detection plans against one extra metre so the executed minimum still reaches the
+requested gap after the bounded braking delay. While external avoidance is active
+the speed integral is held rather than accumulated, so the ship does not leave the
+trigger domain and then accelerate back through it. The original speed floor cannot
 prevent emergency stopping. Setting member avoidance to zero disables this layer
 and restores source-style speed updates for comparisons.
 
@@ -96,13 +108,25 @@ trigger-domain proximity (it is not a joint safety probability).
 
 Verification fixtures for isolated two-vessel head-on, crossing and overtaking
 (with bounded turn dynamics and bounded acceleration) remained above 18 m and
-released coordination within 60 s. Parallel formation does not trigger. Default O
-route member minimum increased from 17.692 to 18.610 m. Default S and Z member
-minima were 39.809 and 32.599 m. Full-route external obstacle centre minima with
-coordination on were 6.568, 6.411 and 18.374 m, respectively: O/S external clearance
-is smaller than with coordination off. This interaction remains a limitation;
-we do not claim that improving teammate separation guarantees external safety.
-Arbitrary user initial states (especially already-overlapping vessels), multiple
-simultaneous conflicts and all parameter extremes are not proven safe. The
-MATLAB helper package remains a reconstruction of the earlier source helpers;
-this new coordinator is implemented in the website Python engine.
+released coordination within 60 s. Parallel formation does not trigger.
+
+Default coordinated runs (member avoidance on, joint clearance layer on):
+
+| Route | External minimum, off | External minimum, on | Member minimum, on |
+|---|---:|---:|---:|
+| O | 8.641 | 14.190 | 18.608 |
+| S | 10.612 | 10.874 | 39.788 |
+| Z | 18.373 | 18.364 | 32.679 |
+
+Coordinated external clearance is no longer below the uncoordinated route on
+these fixtures: O improves and its recorded minimum equals the initial standoff,
+so no later approach is closer; S and Z stay within 0.01 m of the uncoordinated
+minimum. A 30-case one-parameter sweep (avoidance strength 2.5–6, cruise 3–5 m/s,
+expected separation 14–24 m, static trigger radius 25–40 m) improved 12 cases,
+left 13 within 0.2 m and lowered 5; four of the five lowered cases were already
+inside a 10 m centre distance without coordination. This is a mitigation measured
+on fixtures, not a collision-free guarantee. Arbitrary user initial states
+(especially already-overlapping vessels), multiple simultaneous conflicts and all
+parameter extremes are not proven safe. The MATLAB helper package remains a
+reconstruction of the earlier source helpers; the coordinator and joint clearance
+layer are implemented in the website Python engine.

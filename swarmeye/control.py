@@ -111,7 +111,9 @@ def simulate(c):
         else:
             virtual=max((.25 if z else .2)*c['cruise'],c['cruise']-c['sync']*sum(progress-p[:,0]))
             if z:virtual=min(1.4*c['cruise'],virtual)
-        if team_active.any():virtual=0.
+        # The formation clock keeps running: freezing it while a pair is active left the
+        # ships with a large catch-up demand after release, so they accelerated through
+        # whichever external trigger domain they happened to be crossing.
         progress+=virtual*dt;obs+=ov*dt
         active=np.zeros(3,dtype=bool)
         for k in range(3):
@@ -166,7 +168,11 @@ def simulate(c):
             else:sums[k]*=max(0,1-dt)
             raw=c['kp']*error+c['ki']*sums[k]+c['kd']*(error-prev[k])/dt;prev[k]=error
             omega[k]=smooth_omega(raw,omega[k],dt,c['tau'],c['max_rate'],c['max_omega'])
-            if recovery[k]==0:usums[k]+=uerr*dt
+            # Anti-windup in the speed loop: while external avoidance is active the request
+            # is repeatedly turned away from the obstacle, so an integrating speed error
+            # would build up and later accelerate the ship through the same trigger domain.
+            holding=bool(active[k]) and bool(c['team_avoid'])
+            if recovery[k]==0 and not holding:usums[k]+=uerr*dt
             else:usums[k]*=max(0,1-dt)
             ku,iu,du=(.8,.02,.1) if o else (1.,.012,.08) if z else (1.,.01,.1)
             requested=max(low,min(high,base[k]+ku*uerr+iu*usums[k]+du*(uerr-uprev[k])/dt));uprev[k]=uerr
@@ -197,7 +203,7 @@ def simulate(c):
         ys=np.where(xs<=145,60,np.where(xs>=390,-60,60-120*(xs-145)/245)) if z else 30*np.sin(.03*xs)
         routes=[np.column_stack([xs,ys+offset]).tolist() for offset in ((0,45,-45) if z else (0,50,-50))]
     radii=[6.]*3+rr.tolist()
-    return {'version':'control-adapter-2','config':c,'start':start,'duration':duration,'frames':selected,'bounds':[*lo,*hi],
+    return {'version':'control-adapter-3','config':c,'start':start,'duration':duration,'frames':selected,'bounds':[*lo,*hi],
             'a':radii,'b':radii,'independent':3,'labels':['USV1','USV2','USV3']+[f'礁石{i+1}' if i<stat else f'目标船{i-stat+1}' for i in range(len(obs))],
             'static_indices':list(range(3,3+stat)),'controlled':True,'first_avoid':first_avoid,
             'reference_paths':routes,'team_events':coordinator.events,

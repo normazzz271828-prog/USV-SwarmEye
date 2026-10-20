@@ -26,7 +26,11 @@ def test_encounters_clear_without_hull_overlap(positions,headings,speeds):
         minimum=min(minimum,float(np.linalg.norm(p[0]-p[1])))
     assert minimum>=18
     assert not coordinator.encounters
-    assert 2<=len(coordinator.events)<=4
+    # The overtaking case can legitimately re-enter while the simplified test loop restores
+    # the faster boat's speed; what matters is that every entry is released.
+    enters=sum(1 for e in coordinator.events if e['type']=='enter')
+    clears=sum(1 for e in coordinator.events if e['type']=='clear')
+    assert enters==clears and 1<=enters<=3
 
 
 def test_parallel_formation_is_not_disrupted():
@@ -52,6 +56,14 @@ def test_default_circle_team_clearance_and_recovery():
     assert on['diagnostics']['max_acceleration']<=1.5+1e-10
     assert any(e['type']=='clear' for e in on['team_events'])
     assert any(any(f['team_avoiding']) for f in on['frames'])
+
+
+@pytest.mark.parametrize('model',['control_o','control_s','control_z'])
+def test_coordination_does_not_trade_external_clearance_for_member_gap(model):
+    base=defaults(model)
+    on=simulate(base);off=simulate({**base,'team_avoid':0})
+    assert on['diagnostics']['minimum_obstacle_center_distance']>=off['diagnostics']['minimum_obstacle_center_distance']-.2
+    assert on['diagnostics']['minimum_team_center_distance']>=base['team_separation']
 
 
 def test_team_switch_is_binary():

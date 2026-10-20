@@ -26,7 +26,10 @@ class TeamCoordinator:
                 dcpa=float(np.linalg.norm(delta+relative*tcpa)) if math.isfinite(tcpa) else distance
                 closing=float(delta@relative)<-1e-5
                 key=(i,j);record=self.encounters.get(key)
-                dangerous=(0<=tcpa<=self.horizon and dcpa<self.separation) or distance<self.separation
+                # Plan against a one-metre buffer: with the 1.5 m/s² braking limit the
+                # executed minimum would otherwise finish just below the requested gap.
+                guard=self.separation+1.
+                dangerous=(0<=tcpa<=self.horizon and dcpa<guard) or distance<guard
                 if record is None and dangerous:
                     dot=float(np.cos(headings[i]-headings[j]))
                     head_on=dot<-.5
