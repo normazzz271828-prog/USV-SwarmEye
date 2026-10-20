@@ -123,7 +123,7 @@ these fixtures: O improves and its recorded minimum equals the initial standoff,
 so no later approach is closer; S and Z stay within 0.01 m of the uncoordinated
 minimum. A 30-case one-parameter sweep (avoidance strength 2.5–6, cruise 3–5 m/s,
 expected separation 14–24 m, static trigger radius 25–40 m) improved 12 cases,
-left 13 within 0.2 m and lowered 5; four of the five lowered cases were already
+left 13 within 0.2 m and lowered 5; three of the five lowered cases were already
 inside a 10 m centre distance without coordination. This is a mitigation measured
 on fixtures, not a collision-free guarantee. Arbitrary user initial states
 (especially already-overlapping vessels), multiple simultaneous conflicts and all
