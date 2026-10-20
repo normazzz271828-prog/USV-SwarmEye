@@ -38,7 +38,7 @@ Raw quantum contributions can be negative in the supplied algorithm; they are
 not silently replaced with fabricated probabilities.
 
 The field combines `.4 shipfield + .3 fleetfield + .3 quantumfield` with the
-source spatial widths and weights. Display intensity is normalized per frame;
+source spatial widths and weights. Display intensity now uses a fixed maximum over the selected excerpt for each layer;
 exports also include `field_peak`. This field is distinct from the pair score.
 The source slices a 100×100 density grid into a smaller risk grid with different
 coordinates. The adapter evaluates all terms on one aligned display grid (40×40)
@@ -88,3 +88,5 @@ MATLAB runtime execution and a full paper-result reproduction were not performed
 ## Configurable excerpts (adapter 2)
 
 Playback defaults to 120 seconds and accepts integer durations from 30 to 300 seconds, bounded by the search horizon. The camera remains fixed. The nearest independent-ship/fleet-point pair (own/target in fusion) is identified. Orange linking marks domain intrusion; it does not alter motion. At default triangle settings S8/F6 approach to about 15.38 m at simulation second 51, inside their combined 110 m protective radius. No avoidance controller is added.
+
+Adapter 3 exposes the source quantum-field contribution separately from the composite risk field. Both layers use independent, fixed excerpt scales, numeric maxima and a shared color palette. The quantum contribution is the source Gaussian spatial field, not a new phase-interference or wave-propagation solver.

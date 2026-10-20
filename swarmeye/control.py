@@ -189,9 +189,16 @@ def simulate(c):
     duration=min(int(c['duration']),len(frames)-1-start)
     selected=frames[start:start+duration+1]
     points=np.array([f['p'] for f in selected]);lo=points.min(axis=(0,1))-50;hi=points.max(axis=(0,1))+50
+    if o:
+        angles=np.linspace(math.pi,3*math.pi,241)
+        routes=[np.column_stack([260+r*np.cos(angles),r*np.sin(angles)]).tolist() for r in (200,230,170)]
+    else:
+        xs=np.linspace(0,560 if z else 520,241)
+        ys=np.where(xs<=145,60,np.where(xs>=390,-60,60-120*(xs-145)/245)) if z else 30*np.sin(.03*xs)
+        routes=[np.column_stack([xs,ys+offset]).tolist() for offset in ((0,45,-45) if z else (0,50,-50))]
     radii=[6.]*3+rr.tolist()
     return {'version':'control-adapter-2','config':c,'start':start,'duration':duration,'frames':selected,'bounds':[*lo,*hi],
             'a':radii,'b':radii,'independent':3,'labels':['USV1','USV2','USV3']+[f'礁石{i+1}' if i<stat else f'目标船{i-stat+1}' for i in range(len(obs))],
             'static_indices':list(range(3,3+stat)),'controlled':True,'first_avoid':first_avoid,
-            'team_events':coordinator.events,
+            'reference_paths':routes,'team_events':coordinator.events,
             'diagnostics':{'max_acceleration':max_acceleration,'minimum_obstacle_center_distance':min_obstacle,'minimum_team_center_distance':min_team,'computed_seconds':len(frames)-1}}

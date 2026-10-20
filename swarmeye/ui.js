@@ -1,4 +1,5 @@
 // Presentation and input transport only. All simulation/rules run in Python.
+const replayMemory=new WeakMap();
 function mountResearch(root,result,current,send) {
   const q=id=>root.querySelector('#research-'+id), canvas=q('canvas'), ctx=canvas.getContext('2d');
   q('model').onchange=()=>send('research_model',q('model').value);
@@ -7,22 +8,38 @@ function mountResearch(root,result,current,send) {
     if(q('custom-ships').checked){values.ships=[];root.querySelectorAll('[data-ship-row]').forEach(input=>{const i=Number(input.dataset.shipRow);(values.ships[i]??=[])[Number(input.dataset.shipCol)]=Number(input.value);});}
     send('research_run',values);
   };
-  let at=0,playing=false,last=0;
+  const key=JSON.stringify([result.version,result.config,current.formVersion]);
+  const cache=replayMemory.get(root)||new Map();replayMemory.set(root,cache);
+  const saved=cache.get(key);
+  let at=saved?.at||0,playing=false,last=0;
+  if(saved)q('speed').value=saved.speed;
+  let layer=saved?.layer||'quantum_field';
+  if(q('layer'))q('layer').value=layer;
+  const save=()=>{cache.set(key,{at,speed:q('speed').value,layer});if(cache.size>8)cache.delete(cache.keys().next().value);};
   const duration=result.duration;
   q('time').max=duration;if(q('duration'))q('duration').textContent=duration;
   const [xmin,ymin,xmax,ymax]=result.bounds, scale=Math.min(900/(xmax-xmin),580/(ymax-ymin));
   const cx=(xmin+xmax)/2,cy=(ymin+ymax)/2, X=x=>500+(x-cx)*scale,Y=y=>340-(y-cy)*scale;
   const paths=result.labels.map((label,j)=>{const path=new Path2D();result.frames.forEach((frame,k)=>{const [x,y]=frame.p[j];k?path.lineTo(X(x),Y(y)):path.moveTo(X(x),Y(y));});return path;});
-  const fields=result.frames.map(f=>{if(!f.field)return null;const c=document.createElement('canvas');c.width=c.height=40;const x=c.getContext('2d'),im=x.createImageData(40,40);f.field.forEach((v,i)=>{im.data.set([115+v/3,195-v/5,181-v/3,v*.6],i*4);});x.putImageData(im,0,0);return c;});
+  const fieldCache=new Map();
+  function fieldImages(name){
+    if(fieldCache.has(name))return fieldCache.get(name);
+    const images=result.frames.map(f=>{if(!f[name])return null;const c=document.createElement('canvas');c.width=c.height=40;const x=c.getContext('2d'),im=x.createImageData(40,40);
+      const stops=[[15,38,85],[20,140,180],[80,215,175],[245,213,90],[250,105,45]];
+      f[name].forEach((v,i)=>{const t=v/255*4,k=Math.min(3,Math.floor(t)),u=t-k;const rgb=stops[k].map((a,j)=>a+(stops[k+1][j]-a)*u);im.data.set([...rgb,Math.min(220,v*2.5)],i*4);});x.putImageData(im,0,0);return c;});fieldCache.set(name,images);return images;
+  }
+
   function draw() {
     const i=Math.min(duration-1,Math.floor(at)),f=result.frames[i],g=result.frames[i+1],u=at-i;
     ctx.clearRect(0,0,1000,680);ctx.fillStyle='#08232f';ctx.fillRect(0,0,1000,680);
+    const fields=layer==='none'?[]:fieldImages(layer);
     if(fields[i]){ctx.globalAlpha=1-u;ctx.drawImage(fields[i],X(xmin),Y(ymax),(xmax-xmin)*scale,(ymax-ymin)*scale);ctx.globalAlpha=u;ctx.drawImage(fields[i+1],X(xmin),Y(ymax),(xmax-xmin)*scale,(ymax-ymin)*scale);ctx.globalAlpha=1;}
     ctx.strokeStyle='#a4d6d315';ctx.lineWidth=1;
     for(let k=0;k<=10;k++){const x=xmin+(xmax-xmin)*k/10,y=ymin+(ymax-ymin)*k/10;ctx.beginPath();ctx.moveTo(X(x),Y(ymin));ctx.lineTo(X(x),Y(ymax));ctx.stroke();ctx.beginPath();ctx.moveTo(X(xmin),Y(y));ctx.lineTo(X(xmax),Y(y));ctx.stroke();}
+    ctx.setLineDash([8,7]);ctx.strokeStyle='#cde1e788';for(const route of result.reference_paths||[]){ctx.beginPath();route.forEach(([x,y],j)=>j?ctx.lineTo(X(x),Y(y)):ctx.moveTo(X(x),Y(y)));ctx.stroke();}ctx.setLineDash([]);
     // Full excerpt paths keep the camera and spatial reference stable.
     paths.forEach((path,j)=>{ctx.strokeStyle=j<result.independent?'#c4e0d325':'#d8b38225';ctx.stroke(path);});
-    f.domains.forEach((d,j)=>{const next=g.domains[j];if(!next || JSON.stringify(f.groups[j])!==JSON.stringify(g.groups[j]))return;const v=d.map((n,k)=>n+(next[k]-n)*u);ctx.strokeStyle='#e0b57b88';ctx.setLineDash([5,7]);ctx.beginPath();ctx.arc(X(v[0]),Y(v[1]),v[3]*scale,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#a4d8cc88';ctx.beginPath();ctx.arc(X(v[0]),Y(v[1]),v[2]*scale,0,Math.PI*2);ctx.stroke();});
+    (u===1?g:f).domains.forEach((d,j)=>{const next=g.domains[j];const same=u!==1 && next && JSON.stringify(f.groups[j])===JSON.stringify(g.groups[j]);const v=same?d.map((n,k)=>n+(next[k]-n)*u):d;ctx.strokeStyle='#e0b57b88';ctx.setLineDash([5,7]);ctx.beginPath();ctx.arc(X(v[0]),Y(v[1]),v[3]*scale,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#a4d8cc88';ctx.beginPath();ctx.arc(X(v[0]),Y(v[1]),v[2]*scale,0,Math.PI*2);ctx.stroke();});
     f.p.forEach((p,j)=>{
       const x=X(p[0]+(g.p[j][0]-p[0])*u),y=Y(p[1]+(g.p[j][1]-p[1])*u);
       const delta=(g.heading[j]-f.heading[j]+540)%360-180,angle=(f.heading[j]+delta*u)*Math.PI/180;
@@ -36,21 +53,31 @@ function mountResearch(root,result,current,send) {
     const bar=10**Math.floor(Math.log10(180/scale));ctx.strokeStyle='#afc5c9';ctx.beginPath();ctx.moveTo(780,645);ctx.lineTo(780+bar*scale,645);ctx.stroke();ctx.fillText(bar+' m',780,635);
     // Risk is computed at integer seconds: do not fabricate interpolated decisions.
     const exact=result.frames[Math.min(duration,Math.floor(at))];q('risk').textContent=exact.risk.toFixed(3);q('distance').textContent=exact.distance.toFixed(1);
-    if(q('team-distance'))q('team-distance').textContent=result.controlled?'成员最近间距 '+exact.team_distance.toFixed(1)+' m':'';
+    if(q('team-distance'))q('team-distance').textContent=result.controlled && exact.team_distance!=null?'成员最近间距 '+exact.team_distance.toFixed(1)+' m':'';
     const pair=exact.nearest_pair;
     q('pair').textContent=pair.map(j=>result.labels[j]).join(' ↔ ');
     q('intrusion').textContent=result.controlled?(exact.team_avoiding?.some(Boolean)?'成员协调避让':exact.avoiding?.some(Boolean)?'外部避障':exact.recovering?.some(Boolean)?'恢复队形':'航线跟踪'):(exact.intrusion?'保护域侵入':'保护域外');q('intrusion').style.color=exact.intrusion?'#ffad8e':'#a9c6cb';
     if(result.controlled && exact.team_pairs?.length){ctx.strokeStyle='#9ce8e0';ctx.setLineDash([4,5]);for(const [a,b] of exact.team_pairs){ctx.beginPath();ctx.moveTo(X(f.p[a][0]),Y(f.p[a][1]));ctx.lineTo(X(f.p[b][0]),Y(f.p[b][1]));ctx.stroke();}ctx.setLineDash([]);}
     if(exact.intrusion){ctx.strokeStyle='#ff956e';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.beginPath();pair.forEach((j,k)=>{const p=f.p[j],next=g.p[j],x=X(p[0]+(next[0]-p[0])*u),y=Y(p[1]+(next[1]-p[1])*u);k?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.setLineDash([]);ctx.lineWidth=1;}
+    if(q('field-scale')){const maximum=result.field_scales?.[layer];q('field-scale').textContent=maximum?'0 — '+maximum.toFixed(3):'';q('field-peak').textContent=maximum?'当前峰值 '+Number(layer==='quantum_field'?exact.quantum_peak:exact.field_peak).toFixed(3):'';}
     q('clock').textContent=String(Math.floor(at+1e-7)).padStart(2,'0');q('time').value=at;
     q('state').textContent=at>=duration?'片段结束':playing?'播放中':'已暂停';q('play').textContent=playing?'暂停':'播放';
   }
-  function tick(now){if(playing){at=Math.min(duration,at+(now-last)/1000*Number(q('speed').value));if(at>=duration)playing=false;draw();}last=now;current.animationFrame=requestAnimationFrame(tick);}
-  q('play').onclick=()=>{if(at>=duration)at=0;playing=!playing;last=performance.now();draw();};
-  q('replay').onclick=()=>{at=0;playing=true;last=performance.now();draw();};
-  q('time').oninput=()=>{at=Number(q('time').value);playing=false;draw();};
+  function queue(){cancelAnimationFrame(current.animationFrame);if(playing)current.animationFrame=requestAnimationFrame(tick);}
+  function tick(now){if(!playing)return;const elapsed=Math.max(0,(now-last)/1000);last=now;
+    if(elapsed<.5 && !document.hidden)at=Math.min(duration,at+elapsed*Number(q('speed').value));
+    if(at>=duration)playing=false;draw();save();queue();
+  }
+  q('play').onclick=()=>{if(at>=duration)at=0;playing=!playing;last=performance.now();draw();save();queue();};
+  q('replay').onclick=()=>{at=0;playing=true;last=performance.now();draw();save();queue();};
+  q('time').oninput=()=>{at=Math.max(0,Math.min(duration,Number(q('time').value)));playing=false;draw();save();queue();};
+  q('speed').onchange=()=>{last=performance.now();save();};
+  if(q('layer'))q('layer').onchange=()=>{layer=q('layer').value;draw();save();};
+  const visibility=()=>{last=performance.now();if(document.hidden){playing=false;draw();save();queue();}};
+  document.addEventListener('visibilitychange',visibility);
+  current.cleanupResearch=()=>{save();cancelAnimationFrame(current.animationFrame);document.removeEventListener('visibilitychange',visibility);};
   q('export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='swarmeye-research-'+result.config.model+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-  draw();last=performance.now();current.animationFrame=requestAnimationFrame(tick);
+  draw();last=performance.now();
 }
 // Passwords and derived keys never enter component trigger values or storage.
 const vaultAAD = new TextEncoder().encode('SwarmEye encrypted record v1');
@@ -111,6 +138,7 @@ export default function paint(component) {
   const root = parentElement.querySelector('#swarmeye-root');
   if (!root || !data) return;
   const prior = instances.get(parentElement) || {};
+  prior.cleanupResearch?.();
   clearTimeout(prior.timer);
   clearTimeout(prior.loadingTimer);
   root.querySelector('.loading-overlay')?.remove();
@@ -275,7 +303,7 @@ export default function paint(component) {
       } catch(error){
         if(instances.get(parentElement)!==current || busy)return;
         clearTimeout(current.loadingTimer);root.querySelector('.loading-overlay')?.remove();root.removeAttribute('aria-busy');
-        const warning=document.createElement('div');warning.className='notice';warning.setAttribute('role','alert');warning.textContent='回放加载失败，请刷新重试或使用新版浏览器。';root.prepend(warning);
+        const warning=document.createElement('div');warning.className='notice';warning.setAttribute('role','alert');warning.textContent='回放加载失败，请刷新重试或使用新版浏览器。';(root.querySelector('.site')||root).prepend(warning);
       }
     })();
   }
@@ -304,5 +332,5 @@ export default function paint(component) {
     current.animationFrame=requestAnimationFrame(animate);
   }
   if (pageChanged) root.scrollIntoView({block:'start',behavior:'instant'});
-  return () => {clearTimeout(instances.get(parentElement)?.loadingTimer);cancelAnimationFrame(instances.get(parentElement)?.animationFrame);clearTimeout(instances.get(parentElement)?.timer);instances.delete(parentElement);};
+  return () => {instances.get(parentElement)?.cleanupResearch?.();clearTimeout(instances.get(parentElement)?.loadingTimer);cancelAnimationFrame(instances.get(parentElement)?.animationFrame);clearTimeout(instances.get(parentElement)?.timer);instances.delete(parentElement);};
 }

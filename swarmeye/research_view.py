@@ -16,6 +16,7 @@ def console(state):
     for key,(label,default,lo,hi,step) in fields(c['model']).items():
         item=f'<label for="research-param-{key}">{label}<input id="research-param-{key}" name="{key}" type="number" min="{lo}" max="{hi}" step="any" value="{c[key]:g}" required></label>'
         (advanced if key in ('radius','fleet_radius','sigma','entanglement','threshold','domain_a','domain_b','arena','cluster_distance','cluster_heading','time_scale','kp','ki','kd','tau','max_omega','max_rate','sync','lookahead') else basic).append(item)
+    layers=('<div class="research-layers"><label for="research-layer">场图层</label><select id="research-layer"><option value="quantum_field">量子贡献场</option><option value="field">综合风险场</option><option value="none">关闭场图</option></select><span class="field-colorbar"></span><span id="research-field-scale"></span><span id="research-field-peak"></span><span>片段内固定色阶 · 非碰撞概率</span></div>' if c['model'] in ('triangle','s_fleet') else '')
     return f'''<main class="inner-page research-page"><div class="page-heading"><div><p class="eyebrow">RESEARCH SIMULATION</p><h1>让参数，形成航迹。</h1></div><span class="mode-badge">{'闭环避障' if controlled else '风险评估'} · 固定视野</span></div>
     <div class="research-grid"><aside class="inspection"><div class="panel-top">仿真参数</div><div class="inspection-content">
     <label for="research-model">模型</label><select id="research-model">{options}</select>
@@ -24,8 +25,8 @@ def console(state):
     <details><summary>逐船初态</summary><label><input id="research-custom-ships" type="checkbox" {'checked' if 'ships' in c else ''}> 使用下表初态</label><div class="research-ship-table"><table><thead><tr><th>船</th><th>东 / m</th><th>北 / m</th><th>m/s</th><th>航向 / °</th></tr></thead><tbody>{rows}</tbody></table></div></details>
     <div class="actions"><button type="submit" class="btn primary">应用并重新计算 ↗</button><button type="button" class="btn secondary" data-action="research_reset">恢复默认</button></div></form></div></aside>
     <section class="plot-panel"><div class="panel-top"><span>{escape(MODELS[c['model']])}</span><span>{'LOS 引导 / PID 控制' if controlled else '预设航行 · 无自主操纵'}</span></div>
-    <canvas id="research-canvas" width="1000" height="680" role="img" aria-label="船群风险仿真，固定米制坐标"></canvas>
-    <div class="legend"><span>船形：航向</span><span>{'障碍圆：避障触发域' if controlled else '轮廓：保护域'}</span><span>{'菱形：静态障碍' if controlled else '虚线：影响域'}</span></div>
+    {layers}<canvas id="research-canvas" width="1000" height="680" role="img" aria-label="船群风险仿真，固定米制坐标"></canvas>
+    <div class="legend"><span>船形：航向</span><span>{'障碍圆：避障触发域' if controlled else '轮廓：保护域'}</span><span>{'虚线：参考航线 · 菱形：静态障碍' if controlled else '虚线：影响域'}</span></div>
     <div class="research-metrics"><span>{'触发域接近度' if controlled else '风险指数'} <strong id="research-risk">—</strong></span><span>最近距离 <strong id="research-distance">—</strong> m</span><span id="research-team-distance"></span><span id="research-pair"></span><span id="research-intrusion"></span><span id="research-state">已计算</span></div>
     <div class="timeline-panel"><div class="timeline-top"><div class="actions"><button id="research-play" type="button" class="btn primary">播放</button><button id="research-replay" type="button" class="btn secondary">重播</button><label for="research-speed">倍速</label><select id="research-speed"><option>1</option><option selected>2</option><option>4</option><option>8</option></select><button id="research-export" type="button" class="btn text-button">导出参数与结果 ↓</button></div><div class="clock"><span id="research-clock">00</span><span> / <span id="research-duration">{int(c['duration'])}</span> 秒</span></div></div>
     <input id="research-time" aria-label="片段时间" class="timeline" type="range" min="0" max="{int(c['duration'])}" step=".01" value="0"></div>

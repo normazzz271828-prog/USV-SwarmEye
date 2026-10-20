@@ -60,3 +60,16 @@ def test_excerpt_completion_has_explicit_full_review_action():
     assert 'data-action="finish_review"' in html
     assert '片段已完成' in html
     assert 'data-action="download_encrypted"' in html
+
+
+def test_archive_distance_includes_later_targets(monkeypatch):
+    import swarmeye.views as views
+    run=advance(new_run(),180)
+    original=views.truth
+    def truth_with_close_extra(t,config):
+        ships=original(t,config)
+        ships['T9']={**ships['OS'],'x':ships['OS']['x']+1}
+        return ships
+    monkeypatch.setattr(views,'truth',truth_with_close_extra)
+    html=views.archive(dict(runs=[run],active=run['id'],review_at=90))
+    assert '完整场景最小距离 <strong>1.0 m</strong>' in html

@@ -83,3 +83,13 @@ def test_compressed_payload_preserves_results_and_reuses_cache():
     before=_payload.cache_info().hits
     assert payload(config)==encoded
     assert _payload.cache_info().hits==before+1
+
+
+def test_field_layers_use_constant_excerpt_scale():
+    r=simulate(defaults())
+    for name,peak in [('field','field_peak'),('quantum_field','quantum_peak')]:
+        scale=r['field_scales'][name]
+        assert scale==max(f[peak] for f in r['frames'])
+        for f in r['frames']:
+            assert abs(max(f[name])/255*scale-f[peak])<=scale/255
+    assert any(f['field']!=f['quantum_field'] for f in r['frames'])

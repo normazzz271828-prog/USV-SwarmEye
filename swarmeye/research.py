@@ -232,18 +232,26 @@ def _simulate(key):
     bounds=[*(low-pad),*(high+pad)]
     if c['model']!='fusion':
         xx,yy=np.meshgrid(np.linspace(bounds[0],bounds[2],40),np.linspace(bounds[3],bounds[1],40))
+        field_arrays=[];quantum_arrays=[]
         for frame in frames:
-            field=np.zeros_like(xx)
+            field=np.zeros_like(xx);quantum_field=np.zeros_like(xx)
             for j,(x,y) in enumerate(frame['p']):
                 d2=(xx-x)**2+(yy-y)**2
                 if j<n:
                     field+=.4*(.6*np.exp(-d2/(2*a[j]**2))+.4*np.exp(-d2/c['sigma']**2))
-                    field+=.3*.5*np.exp(-d2/(2*(2*a[j])**2))
+                    q=.5*np.exp(-d2/(2*(2*a[j])**2));quantum_field+=q;field+=.3*q
                 else:
-                    field+=.3*.88*.8*np.exp(-d2/(2*a[j]**2))+.3*.3*np.exp(-d2/100**2)
+                    q=.3*np.exp(-d2/100**2);quantum_field+=q
+                    field+=.3*.88*.8*np.exp(-d2/(2*a[j]**2))+.3*q
             peak=float(field.max());frame['field_peak']=peak
-            frame['field']=np.round(field/(peak or 1)*255).astype(int).ravel().tolist()
-    return {'version':'research-adapter-2','config':c,'start':start,'duration':duration,'frames':frames,'bounds':bounds,'a':a.tolist(),'b':b.tolist(),'independent':n,'labels':(['OS']+[f'T{i}' for i in range(1,len(p))]) if c['model']=='fusion' else [f'S{i+1}' if i<n else f'F{i-n+1}' for i in range(len(p))]}
+            frame['quantum_peak']=float(quantum_field.max())
+            field_arrays.append(field);quantum_arrays.append(quantum_field)
+        field_scale=max(f['field_peak'] for f in frames) or 1
+        quantum_scale=max(f['quantum_peak'] for f in frames) or 1
+        for frame,field,qfield in zip(frames,field_arrays,quantum_arrays):
+            frame['field']=np.round(field/field_scale*255).astype(int).ravel().tolist()
+            frame['quantum_field']=np.round(qfield/quantum_scale*255).astype(int).ravel().tolist()
+    return {'version':'research-adapter-3','field_scales':{'field':field_scale,'quantum_field':quantum_scale} if c['model']!='fusion' else {},'config':c,'start':start,'duration':duration,'frames':frames,'bounds':bounds,'a':a.tolist(),'b':b.tolist(),'independent':n,'labels':(['OS']+[f'T{i}' for i in range(1,len(p))]) if c['model']=='fusion' else [f'S{i+1}' if i<n else f'F{i-n+1}' for i in range(len(p))]}
 
 def simulate(raw):
     return _simulate(json.dumps(validate(raw),sort_keys=True))

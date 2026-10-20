@@ -1,4 +1,4 @@
-# Rebuild cloud runtime for compressed playback transport (2026-10-20).
+# Rebuild cloud runtime for reviewed field layers and playback lifecycle (2026-10-20).
 # Research adapters use vectorized numerical calculations.
 streamlit==1.66.0
 numpy>=2.0,<3

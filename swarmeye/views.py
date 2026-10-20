@@ -114,8 +114,8 @@ def archive(state):
         event = next((e for e in selected['events'] if e['id'] == state.get('event')), selected['events'][0])
         at = event['start']
         review_at = max(at, min(180, state.get('review_at', at)))
-        actual_dist = min(pair_metrics(truth(review_at,config_of(selected))['OS'], truth(review_at,config_of(selected))[s])['distance'] for s in ('T1','T2','T3'))
-        min_dist = min(pair_metrics(truth(t,config_of(selected))['OS'], truth(t,config_of(selected))[s])['distance'] for t in range(181) for s in ('T1','T2','T3'))
+        actual_dist = min(pair_metrics(truth(review_at,config_of(selected))['OS'], truth(review_at,config_of(selected))[s])['distance'] for s in truth(review_at,config_of(selected)) if s!='OS')
+        min_dist = min(pair_metrics(truth(t,config_of(selected))['OS'], truth(t,config_of(selected))[s])['distance'] for t in range(181) for s in truth(t,config_of(selected)) if s!='OS')
         event_links = ''.join(button(e['id'], 'select_event', e['id'], 'secondary') for e in selected['events'])
         logs = ''.join(f'<li><span>{d["time"]:03d} s · {esc(d["action"])}</span><p>{esc(d["reason"])}</p>{"<p>复核条件："+esc(d["revisit"])+"</p>" if d["revisit"] else ""}</li>' for d in selected['decisions'] if d['event_id'] == event['id'])
         reviews = ''.join(f'<li><span>{esc(r["status"])}</span><p>{esc(r["note"])}</p></li>' for r in selected['reviews'] if r['event_id'] == event['id'])
